@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  test_db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpassword
+      POSTGRES_DB: edumaster_test
+    ports:
+      - '5433:5432'
+    volumes:
+      - test_db_data:/var/lib/postgresql/data
+
+volumes:
+  test_db_data:

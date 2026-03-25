@@ -1,0 +1,57 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Plan {
+  FREE
+  PRO
+  BETA
+}
+
+model User {
+  id               String      @id @default(cuid())
+  clerkId          String      @unique
+  email            String      @unique
+  name             String?
+  imageUrl         String?
+  plan             Plan        @default(FREE)
+  generationsLeft  Int         @default(10)
+  lastGenerationDate DateTime?
+  stripeCustomerId String?     @unique
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+  classrooms       Classroom[]
+}
+
+model Classroom {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Profile
+  name              String
+  subject           String
+  grade             String
+  curriculum        String
+  studentCount      Int      @default(30)
+  averagePercentile Int      @default(65)
+  teachingNotes     String   @default("")
+
+  // Rich data stored as JSON (arrays of weeks/students)
+  blueprint         Json?    // Blueprint type — JSON serialized
+  students          Json?    // Student[] array — JSON serialized
+  assessmentColumns Json?    // string[] array — JSON serialized
+  savedLessons      Json?    // Record<unitKey, LessonContent> — JSON serialized
+  analysis          Json?    // ClassAnalysis type — JSON serialized
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
