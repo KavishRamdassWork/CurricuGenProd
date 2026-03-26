@@ -96,6 +96,11 @@ export interface Classroom {
   averagePercentile: number; // 0-100
   teachingNotes: string;
 
+  // Advanced Student Customization
+  learningStyles?: string[];
+  accommodations?: string;
+  studentInterests?: string;
+
   // Data
   students: Student[];
   assessmentColumns: string[];

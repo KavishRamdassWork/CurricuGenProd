@@ -73,6 +73,9 @@ export async function generateBlueprintServer(classroom: Classroom): Promise<Blu
     - Class Size: ${classroom.studentCount} students
     - Average Performance: ${classroom.averagePercentile}% (Adjust difficulty accordingly)
     - Teacher Notes/Context: "${sanitizeInput(classroom.teachingNotes, 500)}"
+    ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
+    ${classroom.accommodations ? `- Special Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
+    ${classroom.studentInterests ? `- Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
 
     CRITICAL INSTRUCTIONS:
     1. **OPTIMIZATION**: Since the class average is ${classroom.averagePercentile}%, adjust the pacing and complexity.
@@ -137,7 +140,10 @@ export async function generateLessonPlanServer(classroom: Classroom, units: Week
     - Size: ${classroom.studentCount} students
     - Performance Level: ${classroom.averagePercentile}%
     - Notes: ${sanitizeInput(classroom.teachingNotes, 500)}
-    (Tailor the activities and timing to suit this specific group).
+    ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
+    ${classroom.accommodations ? `- Accommodations Needed (CRITICAL): ${sanitizeInput(classroom.accommodations, 300)}` : ""}
+    ${classroom.studentInterests ? `- Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
+    (Tailor the activities and timing to suit this specific group. If interests are provided, weave them into the lesson examples.)
 
     ${file ? "CRITICAL: A reference document (textbook/booklet) has been provided. You MUST use the terminology, methods, and concepts found in this document to ensure alignment." : ""}
     ${contextText ? `OFFICIAL CURRICULUM CONTEXT: The following texts outline the official standard for this topic. YOU MUST ADHERE TO THIS:\n${contextText}` : ""}
@@ -179,6 +185,8 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
     Topic: ${sanitizeInput(unit.topicTitle)}
     
     Class Average: ${classroom.averagePercentile}% (Adjust difficulty).
+    ${classroom.accommodations ? `Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
+    ${classroom.studentInterests ? `Incorporate these interests if possible: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
     ${userInstruction ? `IMPORTANT USER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
     ${file ? "Reference the attached document for question styles and terminology." : ""}
 
@@ -211,6 +219,9 @@ export async function generateAssignmentServer(classroom: Classroom, unit: WeekU
     Topic: ${sanitizeInput(unit.topicTitle)}
     
     Class Notes: ${sanitizeInput(classroom.teachingNotes, 300)}
+    ${classroom.accommodations ? `Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
+    ${classroom.learningStyles?.length ? `Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
+    ${classroom.studentInterests ? `Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
     ${userInstruction ? `IMPORTANT USER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
     
     Requirements:
@@ -247,6 +258,7 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
     ${scopeText}
     
     Class Average: ${classroom.averagePercentile}% (Ensure appropriate difficulty curve).
+    ${classroom.accommodations ? `MUST INCLUDE Accommodations for: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
     ${userInstruction ? `IMPORTANT USER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
 
     Requirements:
@@ -324,6 +336,9 @@ export async function generateGameServer(classroom: Classroom, unit: WeekUnit, f
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
     Topic: ${sanitizeInput(unit.topicTitle)}
     Class Size: ${classroom.studentCount} students.
+    ${classroom.learningStyles?.length ? `The game must appeal to these learning styles: ${classroom.learningStyles.join(', ')}.` : ""}
+    ${classroom.studentInterests ? `Theme the game around: ${sanitizeInput(classroom.studentInterests, 300)} if possible.` : ""}
+    ${classroom.accommodations ? `Ensure the game accommodates: ${sanitizeInput(classroom.accommodations, 300)}.` : ""}
     
     Format using Markdown.
   `;

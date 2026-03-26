@@ -15,12 +15,13 @@ interface LessonWorkspaceProps {
   activeClass: Classroom;
   onBack: () => void;
   onSaveClassContent: (classId: string, unitId: string, content: any) => void;
+  onContentGenerated?: () => void;
 }
 
 type MainTab = 'plan' | 'slides' | 'game' | 'resources' | 'visuals';
 type ResourceType = 'worksheet' | 'assignment' | 'test';
 
-const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, onBack, onSaveClassContent }) => {
+const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, onBack, onSaveClassContent, onContentGenerated }) => {
   const isRevisionMode = units.length > 1;
   const unitKey = isRevisionMode ? `revision-${units.map(u => u.weekNumber).join('-')}` : `${units[0].weekNumber}-${units[0].topicTitle}`;
 
@@ -103,6 +104,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         if (type === 'slides') setSlides(content);
         if (type === 'game') setGame(content);
         if (type === 'resources') setResources(content);
+        onContentGenerated?.();
       }
     } catch (e: any) {
       if (e.code === 'LIMIT_REACHED') {
@@ -137,6 +139,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         setTests(p => [...p, { id, type: 'test', title, content, memo: null }]);
       }
       setActiveSection('educational'); setSelectedResourceId(id); setResourceViewMode('content');
+      onContentGenerated?.();
     } catch (e: any) {
       if (e.code === 'LIMIT_REACHED') {
         if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
@@ -180,6 +183,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         }
       }
       setChatHistory(p => [...p, { id: Date.now().toString(), role: 'ai', text: "Content updated successfully." }]);
+      onContentGenerated?.();
     } catch (e: any) {
       if (e.code === 'LIMIT_REACHED') {
         if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
@@ -263,24 +267,26 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       {/* MAIN DOCUMENT AREA */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
         <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-none">
-          <div>
-            <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-              {isRevisionMode ? "Revision Plan" : units[0].topicTitle}
+          <div className="min-w-0 pr-4 flex-1">
+            <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2 truncate">
+              <span className="truncate">{isRevisionMode ? "Revision Plan" : units[0].topicTitle}</span>
               {activeSection === 'educational' && selectedResourceId && (
-                <span className="text-slate-400 font-normal">/ {[...worksheets, ...assignments, ...tests].find(r => r.id === selectedResourceId)?.title}</span>
+                <span className="text-slate-400 font-normal truncate flex-shrink-0">
+                  / {[...worksheets, ...assignments, ...tests].find(r => r.id === selectedResourceId)?.title}
+                </span>
               )}
             </h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             {activeSection === 'educational' && (
-              <div className="flex bg-slate-100 p-1 rounded-lg mr-4">
+              <div className="flex bg-slate-100 p-1 rounded-lg mr-4 flex-shrink-0">
                 <button onClick={() => setResourceViewMode('content')} className={`px-3 py-1 text-xs font-bold rounded-md ${resourceViewMode === 'content' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Content</button>
                 <button onClick={() => setResourceViewMode('memo')} className={`px-3 py-1 text-xs font-bold rounded-md ${resourceViewMode === 'memo' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500'}`}>Memo</button>
               </div>
             )}
-            <button onClick={() => setIsTemplateModalOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"><Settings className="w-5 h-5" /></button>
-            <button onClick={() => setIsChatOpen(!isChatOpen)} className={`p-2 rounded-lg transition-colors ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="w-5 h-5" /></button>
-            <button onClick={() => window.print()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg"><Printer className="w-5 h-5" /></button>
+            <button onClick={() => setIsTemplateModalOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Settings className="w-5 h-5" /></button>
+            <button onClick={() => setIsChatOpen(!isChatOpen)} className={`p-2 rounded-lg transition-colors flex-shrink-0 ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="w-5 h-5" /></button>
+            <button onClick={() => window.print()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Printer className="w-5 h-5" /></button>
           </div>
         </div>
 
@@ -296,12 +302,16 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
               <DocumentHeader />
               {activeSection === 'plan' && (lessonPlan ? <div className="prose max-w-none"><RenderMarkdown>{lessonPlan}</RenderMarkdown></div> : <EmptyState icon={BookOpen} label="Lesson Plan" action={() => handleGenerateMain('plan')} />)}
               {activeSection === 'slides' && (slides ? <div className="prose max-w-none"><RenderMarkdown>{slides}</RenderMarkdown></div> : <EmptyState icon={MonitorPlay} label="Slide Outline" action={() => handleGenerateMain('slides')} />)}
-              {activeSection === 'visuals' && (generatedImageUrl ? (
-                <div className="flex flex-col items-center">
-                  <img src={generatedImageUrl} alt="Generated visual" className="rounded-lg shadow-lg max-w-full" />
-                  <button onClick={() => handleGenerateMain('visuals')} className="mt-4 text-blue-600 text-sm font-bold flex items-center gap-2 hover:underline"><Sparkles className="w-4 h-4" /> Regenerate</button>
+              {activeSection === 'visuals' && (
+                <div className="flex flex-col items-center justify-center py-32 text-center opacity-80">
+                  <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
+                    <ImageIcon className="w-8 h-8 text-blue-400" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-slate-800 mb-2">Visual Elements</h3>
+                  <p className="text-slate-500 max-w-sm mb-6">We are currently upgrading our image generation engine. This feature will be available soon!</p>
+                  <div className="px-4 py-1.5 bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider rounded-full">Coming Soon</div>
                 </div>
-              ) : <EmptyState icon={ImageIcon} label="Educational Image" action={() => handleGenerateMain('visuals')} />)}
+              )}
               {activeSection === 'game' && (game ? <div className="prose max-w-none"><RenderMarkdown>{game}</RenderMarkdown></div> : <EmptyState icon={Gamepad2} label="Activity / Game" action={() => handleGenerateMain('game')} />)}
               {activeSection === 'resources' && (resources ? <div className="prose max-w-none"><RenderMarkdown>{resources}</RenderMarkdown></div> : <EmptyState icon={Library} label="Resources" action={() => handleGenerateMain('resources')} />)}
               {activeSection === 'educational' && selectedResourceId && (() => {
@@ -320,6 +330,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                           setTests(prev => prev.map(t => t.id === res.id ? {...t, memo: m} : t));
                           setAssignments(prev => prev.map(t => t.id === res.id ? {...t, memo: m} : t));
                           setWorksheets(prev => prev.map(t => t.id === res.id ? {...t, memo: m} : t));
+                          onContentGenerated?.();
                         } catch (e: any) {
                           if (e.code === 'LIMIT_REACHED') {
                             if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';

@@ -18,13 +18,10 @@ export default async function RootPage() {
           </svg>
         </div>
 
-        <div className="inline-flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 px-4 py-2 rounded-full text-blue-300 text-sm font-medium mb-6">
-          <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
-          Powered by Google Gemini AI
-        </div>
+
 
         <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tight mb-6 leading-none">
-          EduMaster<span className="text-blue-400"> Pro</span>
+          CurricuGen<span className="text-blue-400"> Pro</span>
         </h1>
 
         <p className="text-xl text-slate-400 mb-4 max-w-2xl mx-auto leading-relaxed">
@@ -39,14 +36,20 @@ export default async function RootPage() {
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
           <a href="/sign-up" className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/30 transition-all hover:-translate-y-1 text-lg">
-            Start Free — 3 Generations
+            Start Free — 10 Daily Generations
           </a>
           <a href="/sign-in" className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold rounded-xl transition-all hover:-translate-y-1 text-lg">
             Sign In
           </a>
         </div>
 
-        <p className="text-slate-500 text-sm mt-8">No credit card required. Free plan includes 3 AI generations.</p>
+        <div className="text-slate-500 text-sm mt-8 space-y-3">
+          <p>No credit card required. Free plan includes 10 AI generations per day.</p>
+          <p className="flex items-center justify-center gap-1.5 opacity-60">
+            <span className="w-1.5 h-1.5 bg-slate-400 rounded-full" />
+            Powered by Google Gemini AI
+          </p>
+        </div>
       </div>
     </main>
   );

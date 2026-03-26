@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       email_address: dbUser.email,
       m_payment_id: `EDU_${Date.now()}`,
       amount: '180.00', // R180.00 ZAR (~$10 USD)
-      item_name: 'EduMaster Pro Subscription (1 Month)',
+      item_name: 'CurricuGen Pro Subscription (1 Month)',
       custom_str1: userId, // Pass clerk ID to webhook
       subscription_type: '1', // 1 = Subscription
       billing_date: new Date().toISOString().split('T')[0],

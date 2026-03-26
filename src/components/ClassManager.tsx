@@ -5,7 +5,7 @@ import { Classroom, Student, ClassAnalysis } from '@/lib/types';
 import { CURRICULUMS, GRADES, SUBJECTS_COMMON } from '@/lib/constants';
 import { generateMarksTemplate, parseMarksTemplate } from '@/lib/excelHelper';
 import { analyzeClassPerformance } from '@/lib/gemini';
-import { Users, Plus, ChevronRight, BookOpen, GraduationCap, Globe, Layers, ArrowRight, X, BarChart2, Download, Upload, AlertTriangle, TrendingUp, Sparkles, FileSpreadsheet, MoreHorizontal, PieChart, Loader2 } from 'lucide-react';
+import { Users, Plus, ArrowRight, X, BarChart2, Download, Upload, AlertTriangle, TrendingUp, Sparkles, PieChart, Loader2, BrainCircuit, Heart, Fingerprint, BookOpen } from 'lucide-react';
 
 interface ClassManagerProps {
   classes: Classroom[];
@@ -15,6 +15,8 @@ interface ClassManagerProps {
   onDeleteClass?: (classroomId: string) => Promise<void>;
 }
 
+const LEARNING_STYLES = ['Visual', 'Auditory', 'Reading/Writing', 'Kinesthetic', 'Logical', 'Social', 'Solitary'];
+
 const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpenClass, onCreateClass, onDeleteClass }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeAnalysisClassId, setActiveAnalysisClassId] = useState<string | null>(null);
@@ -22,6 +24,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
   const [isCreating, setIsCreating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
+  // Form State
   const [name, setName] = useState('');
   const [subject, setSubject] = useState('');
   const [grade, setGrade] = useState(GRADES[0]);
@@ -29,8 +32,15 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
   const [studentCount, setStudentCount] = useState(30);
   const [percentile, setPercentile] = useState(65);
   const [notes, setNotes] = useState('');
+  const [learningStyles, setLearningStyles] = useState<string[]>([]);
+  const [accommodations, setAccommodations] = useState('');
+  const [studentInterests, setStudentInterests] = useState('');
 
   const activeAnalysisClass = classes.find(c => c.id === activeAnalysisClassId);
+
+  const toggleLearningStyle = (style: string) => {
+    setLearningStyles(prev => prev.includes(style) ? prev.filter(s => s !== style) : [...prev, style]);
+  };
 
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,6 +49,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
       name, subject, grade, curriculum, studentCount,
       averagePercentile: percentile,
       teachingNotes: notes,
+      learningStyles, accommodations, studentInterests,
       students: [],
       assessmentColumns: [],
     };
@@ -58,17 +69,24 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
   };
 
   const resetForm = () => {
-    setName(''); setSubject(''); setGrade(GRADES[0]);
-    setNotes(''); setPercentile(65); setStudentCount(30);
+    setName('');
+    setSubject('');
+    setGrade(GRADES[0]);
+    setNotes('');
+    setPercentile(65);
+    setStudentCount(30);
+    setLearningStyles([]);
+    setAccommodations('');
+    setStudentInterests('');
   };
 
   const handleDownloadTemplate = () => {
     if (!activeAnalysisClass) return;
-    const columns = activeAnalysisClass.assessmentColumns.length > 0
-      ? activeAnalysisClass.assessmentColumns
+    const columns = activeAnalysisClass.assessmentColumns.length > 0 
+      ? activeAnalysisClass.assessmentColumns 
       : ['Term 1 Test', 'Assignment 1', 'Mid-Year Exam'];
-    const studentsForTemplate = activeAnalysisClass.students.length > 0
-      ? activeAnalysisClass.students
+    const studentsForTemplate = activeAnalysisClass.students.length > 0 
+      ? activeAnalysisClass.students 
       : Array.from({ length: 5 }).map((_, i) => ({ id: `ST${i+1}`, name: `Student ${i+1}` } as Student));
     generateMarksTemplate(studentsForTemplate, columns);
   };
@@ -86,8 +104,9 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
       const analysis = await analyzeClassPerformance(students);
       setClasses(prev => prev.map(c => {
         if (c.id === activeAnalysisClass.id) {
-          return {
-            ...c, analysis,
+          return { 
+            ...c, 
+            analysis,
             averagePercentile: Math.round(students.reduce((acc, s) => acc + (s.average || 0), 0) / students.length) || c.averagePercentile
           };
         }
@@ -103,55 +122,106 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
   };
 
   return (
-    <div className="flex-1 h-full overflow-y-auto bg-slate-50 p-6 md:p-10 relative">
+    <div className="flex-1 h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-blue-50/40 p-6 md:p-10 relative">
       <div className="max-w-7xl mx-auto">
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6">
+        
+        {/* Header */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative z-10">
           <div>
-            <h1 className="text-4xl font-extrabold text-slate-900 tracking-tight mb-3">Class Manager</h1>
-            <p className="text-slate-500 text-lg max-w-2xl">Design, organize, and analyze your classrooms. Create tailored curriculums driven by AI.</p>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/50 text-blue-700 text-sm font-semibold mb-4 border border-blue-200">
+               <Sparkles className="w-4 h-4" /> AI-Powered Curriculum
+            </div>
+            <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">Classpaces</h1>
+            <p className="text-slate-500 text-lg max-w-2xl font-light">
+              Design, organize, and deeply analyze your classrooms. Create tailored curriculums driven by specific student needs and AI intelligence.
+            </p>
           </div>
-          <button onClick={() => setIsModalOpen(true)} className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3.5 rounded-xl font-bold shadow-xl shadow-blue-500/20 transition-all transform hover:-translate-y-1 active:scale-95">
-            <Plus className="w-5 h-5" /> Create Class
+          <button 
+            onClick={() => setIsModalOpen(true)}
+            className="group flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-7 py-4 rounded-full font-bold shadow-xl shadow-slate-900/10 transition-all transform hover:-translate-y-1 active:scale-95"
+          >
+            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+            <span className="tracking-wide">Create Class</span>
           </button>
         </div>
 
+        {/* Class Grid */}
         {classes.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-32 bg-white rounded-3xl border-2 border-dashed border-slate-200">
-            <div className="bg-blue-50 p-6 rounded-full mb-6"><Users className="w-12 h-12 text-blue-400" /></div>
-            <h3 className="text-2xl font-bold text-slate-800 mb-3">No Classes Created</h3>
-            <p className="text-slate-400 max-w-md text-center mb-8">Your workspace is empty. Create your first class profile to start generating lesson content.</p>
+          <div className="flex flex-col items-center justify-center py-40 bg-white/60 backdrop-blur-xl rounded-[2.5rem] border border-white/60 shadow-2xl shadow-slate-200/50 relative overflow-hidden group">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-purple-500/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+            <div className="bg-gradient-to-br from-blue-500 to-indigo-600 p-8 rounded-full mb-8 shadow-2xl shadow-blue-500/30 transform group-hover:scale-110 transition-transform duration-500">
+              <Users className="w-12 h-12 text-white" />
+            </div>
+            <h3 className="text-3xl font-extrabold text-slate-800 mb-4 tracking-tight">No Classes Yet</h3>
+            <p className="text-slate-500 max-w-md text-center text-lg mb-10 leading-relaxed">
+              Your workspace is a blank canvas. Profile your first class to generate highly-tailored curriculum content.
+            </p>
+            <button 
+              onClick={() => setIsModalOpen(true)}
+              className="text-blue-600 font-bold flex items-center gap-2 hover:bg-blue-50 px-6 py-3 rounded-full transition-colors"
+            >
+               Get Started <ArrowRight className="w-5 h-5" />
+            </button>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
             {classes.map(cls => (
-              <div key={cls.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-2xl hover:border-blue-200 hover:-translate-y-1 transition-all duration-300 flex flex-col overflow-hidden group">
-                <div className="h-2 bg-gradient-to-r from-blue-500 to-indigo-600 w-full" />
-                <div className="p-6 flex-1 cursor-pointer" onClick={() => onOpenClass(cls)}>
-                  <div className="flex justify-between items-start mb-4">
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-slate-100 text-slate-600 uppercase tracking-wide">{cls.grade}</span>
-                    <button onClick={(e) => { e.stopPropagation(); setActiveAnalysisClassId(cls.id); }} className="text-slate-300 hover:text-blue-600 transition-colors">
-                      <BarChart2 className="w-5 h-5" />
+              <div 
+                key={cls.id} 
+                className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white shadow-xl shadow-slate-200/40 hover:shadow-2xl hover:shadow-blue-900/10 hover:-translate-y-2 transition-all duration-500 flex flex-col overflow-hidden group relative"
+              >
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-bl-full -z-10 group-hover:scale-150 transition-transform duration-700" />
+                
+                <div className="p-8 flex-1 cursor-pointer z-10" onClick={() => onOpenClass(cls)}>
+                  <div className="flex justify-between items-start mb-6">
+                    <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 uppercase tracking-widest">
+                       {cls.grade}
+                    </span>
+                    <button 
+                       onClick={(e) => { e.stopPropagation(); setActiveAnalysisClassId(cls.id); }} 
+                       className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 hover:shadow-md hover:shadow-blue-500/30 transition-all duration-300"
+                    >
+                       <BarChart2 className="w-5 h-5" />
                     </button>
                   </div>
-                  <h3 className="text-xl font-bold text-slate-900 mb-1 group-hover:text-blue-600 transition-colors">{cls.name}</h3>
-                  <p className="text-sm font-medium text-slate-500 mb-6">{cls.subject} • {cls.curriculum}</p>
-                  <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-6">
+                  
+                  <h3 className="text-2xl font-extrabold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors tracking-tight">{cls.name}</h3>
+                  <p className="text-sm font-medium text-slate-500 mb-8">{cls.subject} • {cls.curriculum}</p>
+                  
+                  <div className="grid grid-cols-2 gap-6 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
                     <div>
-                      <div className="text-xs text-slate-400 font-bold uppercase mb-1">Students</div>
-                      <div className="flex items-center gap-2"><Users className="w-4 h-4 text-slate-400" /><span className="font-bold text-slate-700">{cls.studentCount}</span></div>
+                       <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Students</div>
+                       <div className="flex items-center gap-2">
+                          <Users className="w-5 h-5 text-slate-400" />
+                          <span className="font-extrabold text-slate-700 text-lg">{cls.studentCount}</span>
+                       </div>
                     </div>
                     <div>
-                      <div className="text-xs text-slate-400 font-bold uppercase mb-1">Avg. Grade</div>
-                      <div className="flex items-center gap-2">
-                        <PieChart className="w-4 h-4 text-slate-400" />
-                        <span className={`font-bold ${cls.averagePercentile < 50 ? 'text-red-500' : cls.averagePercentile > 75 ? 'text-green-600' : 'text-slate-700'}`}>{cls.averagePercentile}%</span>
-                      </div>
+                       <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Avg. Grade</div>
+                       <div className="flex items-center gap-2">
+                          <PieChart className={`w-5 h-5 ${cls.averagePercentile < 50 ? 'text-red-400' : cls.averagePercentile > 75 ? 'text-green-500' : 'text-slate-400'}`} />
+                          <span className={`font-extrabold text-lg ${cls.averagePercentile < 50 ? 'text-red-500' : cls.averagePercentile > 75 ? 'text-green-600' : 'text-slate-700'}`}>
+                             {cls.averagePercentile}%
+                          </span>
+                       </div>
                     </div>
                   </div>
+                  
+                  {/* Quick look at accommodations/interests if any */}
+                  {(cls.accommodations || cls.studentInterests) && (
+                     <div className="mt-4 flex flex-wrap gap-2">
+                        {cls.accommodations && <span className="text-[10px] uppercase font-bold text-amber-600 bg-amber-50 px-2 py-1 rounded-md">Accommodations</span>}
+                        {cls.studentInterests && <span className="text-[10px] uppercase font-bold text-indigo-600 bg-indigo-50 px-2 py-1 rounded-md">Interests Mapped</span>}
+                     </div>
+                  )}
                 </div>
-                <div onClick={() => onOpenClass(cls)} className="bg-slate-50 p-4 flex items-center justify-between border-t border-slate-100 group-hover:bg-blue-600 transition-colors cursor-pointer">
-                  <span className="text-xs font-bold text-slate-500 group-hover:text-white uppercase tracking-wider">Open Curriculum</span>
-                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-white transform group-hover:translate-x-1 transition-all" />
+
+                {/* Footer Action */}
+                <div onClick={() => onOpenClass(cls)} className="p-5 flex items-center justify-between border-t border-slate-100 bg-white/50 group-hover:bg-blue-600 transition-colors duration-300 cursor-pointer z-10">
+                   <span className="text-xs font-bold text-slate-400 group-hover:text-blue-50 uppercase tracking-widest pl-3">Open Workspace</span>
+                   <div className="w-8 h-8 rounded-full bg-slate-100 group-hover:bg-white/20 flex items-center justify-center transition-colors">
+                      <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-white transform group-hover:translate-x-0.5 transition-all" />
+                   </div>
                 </div>
               </div>
             ))}
@@ -161,52 +231,119 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
 
       {/* CREATE CLASS MODAL */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="bg-white px-8 py-6 border-b border-slate-100 flex justify-between items-center flex-none">
-              <h2 className="text-2xl font-bold text-slate-900">New Class Profile</h2>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-50 rounded-full hover:bg-slate-200 transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-white/95 backdrop-blur-xl w-full max-w-4xl rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col max-h-[92vh] border border-white">
+            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center flex-none bg-white">
+              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">New Class Profile</h2>
+              <button title="Close Modal" onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-50 rounded-full hover:bg-slate-200 transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
             </div>
-            <form onSubmit={handleCreateClass} className="p-8 overflow-y-auto flex-1">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-                <div className="col-span-full">
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Class Name</label>
-                  <input required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Grade 5 - Hawks Group" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-medium" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Subject</label>
-                  <input required list="subjects" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Select Subject" className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all" />
-                  <datalist id="subjects">{SUBJECTS_COMMON.map(s => <option key={s} value={s} />)}</datalist>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Grade</label>
-                  <select required value={grade} onChange={e => setGrade(e.target.value)} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none">
-                    {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-full">
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Curriculum</label>
-                  <select required value={curriculum} onChange={e => setCurriculum(e.target.value)} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none">
-                    {CURRICULUMS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Student Count</label>
-                  <input type="number" min="1" required value={studentCount} onChange={e => setStudentCount(Number(e.target.value))} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all" />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Avg. Performance (%)</label>
-                  <input type="number" min="0" max="100" required value={percentile} onChange={e => setPercentile(Number(e.target.value))} className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all" />
-                </div>
-                <div className="col-span-full">
-                  <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Teaching Context</label>
-                  <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="E.g. Class struggles with reading comprehension..." className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-24 resize-none" />
-                </div>
-              </div>
-              <div className="flex gap-4">
-                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3.5 rounded-xl border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 transition-colors">Cancel</button>
-                <button type="submit" className="flex-[2] py-3.5 rounded-xl bg-blue-600 text-white font-bold shadow-lg shadow-blue-500/20 hover:bg-blue-500 transition-colors">Create Class</button>
-              </div>
+            
+            <form onSubmit={handleCreateClass} className="p-8 overflow-y-auto flex-1 custom-scrollbar">
+               <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                  
+                  {/* Column 1: Core Details */}
+                  <div className="lg:col-span-5 space-y-6">
+                     <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
+                        <BookOpen className="w-5 h-5 text-blue-600" />
+                        <h3 className="font-bold text-slate-800">Core Details</h3>
+                     </div>
+                     <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Class Name</label>
+                        <input required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Grade 5 - Hawks Group" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-medium text-slate-800 placeholder-slate-400" />
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div>
+                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Subject</label>
+                           <input required list="subjects" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Select Subject" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-slate-800 font-medium" />
+                           <datalist id="subjects">{SUBJECTS_COMMON.map(s => <option key={s} value={s} />)}</datalist>
+                        </div>
+                        <div>
+                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Grade</label>
+                           <select required value={grade} onChange={e => setGrade(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none text-slate-800 font-medium">
+                           {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
+                           </select>
+                        </div>
+                     </div>
+                     <div className="grid grid-cols-2 gap-4">
+                        <div>
+                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Student Count</label>
+                           <input type="number" min="1" required value={studentCount} onChange={e => setStudentCount(Number(e.target.value))} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-slate-800 font-medium" />
+                        </div>
+                        <div>
+                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Avg. Performance (%)</label>
+                           <input type="number" min="0" max="100" required value={percentile} onChange={e => setPercentile(Number(e.target.value))} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-slate-800 font-medium" />
+                        </div>
+                     </div>
+                     <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Curriculum Standard</label>
+                        <select required value={curriculum} onChange={e => setCurriculum(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none text-slate-800 font-medium">
+                           {CURRICULUMS.map(c => <option key={c} value={c}>{c}</option>)}
+                        </select>
+                     </div>
+                  </div>
+
+                  {/* Column 2: Advanced AI Inputs */}
+                  <div className="lg:col-span-7 space-y-6">
+                     <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
+                        <div className="flex items-center gap-2">
+                           <BrainCircuit className="w-5 h-5 text-indigo-500" />
+                           <h3 className="font-bold text-slate-800">Advanced AI Customization</h3>
+                        </div>
+                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-full uppercase tracking-wider">Boosts Output Quality</span>
+                     </div>
+                     
+                     <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block flex items-center gap-2">
+                           <Fingerprint className="w-3 h-3" /> Dominant Learning Styles (Optional)
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                           {LEARNING_STYLES.map(style => (
+                              <button
+                                 key={style}
+                                 type="button"
+                                 onClick={() => toggleLearningStyle(style)}
+                                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                                    learningStyles.includes(style)
+                                       ? 'bg-indigo-50 border-indigo-200 text-indigo-700 shadow-sm'
+                                       : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300 hover:bg-slate-50'
+                                 }`}
+                              >
+                                 {style}
+                              </button>
+                           ))}
+                        </div>
+                     </div>
+
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block flex items-center gap-2">
+                              <Heart className="w-3 h-3" /> Accommodations / IEPs
+                           </label>
+                           <textarea value={accommodations} onChange={e => setAccommodations(e.target.value)} placeholder="e.g. Dyslexia friendly fonts, extra time, ADHD short tasks..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-24 resize-none text-sm text-slate-700" />
+                        </div>
+                        <div>
+                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block flex items-center gap-2">
+                              <Sparkles className="w-3 h-3" /> Student Interests
+                           </label>
+                           <textarea value={studentInterests} onChange={e => setStudentInterests(e.target.value)} placeholder="e.g. Minecraft, Space explorer, Sports. AI will weave this into word problems." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-24 resize-none text-sm text-slate-700" />
+                        </div>
+                     </div>
+
+                     <div>
+                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">General Teaching Context</label>
+                        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any other context? E.g. Class struggles with reading comprehension..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-16 resize-none text-sm text-slate-700" />
+                     </div>
+                  </div>
+
+               </div>
+
+               {/* Footer */}
+               <div className="mt-10 pt-6 border-t border-slate-100 flex gap-4 justify-end">
+                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Cancel</button>
+                 <button type="submit" disabled={isCreating} className="px-10 py-4 rounded-full bg-slate-900 text-white font-extrabold shadow-xl shadow-slate-900/20 hover:bg-slate-800 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
+                    {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />} Create Workspace <ArrowRight className="w-5 h-5" />
+                 </button>
+               </div>
             </form>
           </div>
         </div>
@@ -215,69 +352,93 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
       {/* ANALYTICS SLIDE-OVER */}
       {activeAnalysisClass && (
         <div className="fixed inset-0 z-[100] flex justify-end">
-          <div className="absolute inset-0 bg-slate-900/20 backdrop-blur-sm transition-opacity" onClick={() => setActiveAnalysisClassId(null)} />
-          <div className="relative w-full max-w-2xl bg-white shadow-2xl h-full flex flex-col">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <div>
-                <h2 className="text-xl font-bold text-slate-900">Analytics Dashboard</h2>
-                <p className="text-sm text-slate-500">{activeAnalysisClass.name}</p>
-              </div>
-              <button onClick={() => setActiveAnalysisClassId(null)} className="p-2 hover:bg-slate-200 rounded-full transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setActiveAnalysisClassId(null)} />
+          <div className="relative w-full max-w-2xl bg-white/95 backdrop-blur-3xl shadow-2xl h-full flex flex-col animate-in slide-in-from-right duration-500 border-l border-white">
+            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-white/50 backdrop-blur-md sticky top-0 z-10">
+               <div>
+                  <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Intelligence Hub</h2>
+                  <p className="font-medium text-slate-500">{activeAnalysisClass.name}</p>
+               </div>
+               <button title="Close Analytics" onClick={() => setActiveAnalysisClassId(null)} className="p-3 hover:bg-slate-100 rounded-full transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-6 space-y-8">
-              <div className="grid grid-cols-2 gap-4">
-                <button onClick={handleDownloadTemplate} className="p-4 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-left group">
-                  <Download className="w-5 h-5 text-slate-400 group-hover:text-blue-600 mb-2" />
-                  <div className="font-bold text-slate-700">Download Template</div>
-                  <div className="text-xs text-slate-400">Get Excel format</div>
-                </button>
-                <div className="relative">
-                  <input type="file" ref={fileInputRef} accept=".xlsx, .xls" onChange={handleUploadMarks} className="hidden" />
-                  <button onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing} className="w-full h-full p-4 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-all text-left group disabled:opacity-50">
-                    {isAnalyzing ? <Loader2 className="w-5 h-5 text-blue-600 animate-spin mb-2" /> : <Upload className="w-5 h-5 text-slate-400 group-hover:text-blue-600 mb-2" />}
-                    <div className="font-bold text-slate-700">{isAnalyzing ? 'Analyzing...' : 'Upload Marks'}</div>
-                    <div className="text-xs text-slate-400">Import & Analyze</div>
+            
+            <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
+               {/* Quick Actions */}
+               <div className="grid grid-cols-2 gap-6">
+                  <button onClick={handleDownloadTemplate} className="p-6 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all text-left flex flex-col justify-center items-start group">
+                     <div className="w-12 h-12 bg-blue-100/50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-600 transition-colors">
+                        <Download className="w-6 h-6 text-blue-600 group-hover:text-white transition-colors" />
+                     </div>
+                     <div className="font-extrabold text-slate-800 text-lg mb-1">Get Data Template</div>
+                     <div className="text-sm font-medium text-slate-500">Download Excel format</div>
                   </button>
-                </div>
-              </div>
-              {!activeAnalysisClass.analysis ? (
-                <div className="text-center py-12 opacity-50">
-                  <BarChart2 className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                  <p className="text-slate-500">Upload student data to generate insights.</p>
-                </div>
-              ) : (
-                <div className="space-y-6">
-                  <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-6 rounded-2xl border border-blue-100">
-                    <h3 className="font-bold text-indigo-900 mb-2 flex items-center gap-2"><Sparkles className="w-4 h-4" /> AI Summary</h3>
-                    <p className="text-slate-700 leading-relaxed text-sm">{activeAnalysisClass.analysis.summary}</p>
+                  <div className="relative">
+                     <input type="file" ref={fileInputRef} accept=".xlsx, .xls" onChange={handleUploadMarks} className="hidden" />
+                     <button onClick={() => fileInputRef.current?.click()} disabled={isAnalyzing} className="w-full h-full p-6 rounded-2xl bg-white border border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all text-left flex flex-col justify-center items-start group disabled:opacity-50 disabled:hover:translate-y-0">
+                        <div className="w-12 h-12 bg-indigo-100/50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-indigo-600 transition-colors">
+                           {isAnalyzing ? <Loader2 className="w-6 h-6 text-indigo-600 group-hover:text-white animate-spin" /> : <Upload className="w-6 h-6 text-indigo-600 group-hover:text-white transition-colors" />}
+                        </div>
+                        <div className="font-extrabold text-slate-800 text-lg mb-1">{isAnalyzing ? 'Analyzing...' : 'Upload & Analyze'}</div>
+                        <div className="text-sm font-medium text-slate-500">Run AI insights</div>
+                     </button>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-blue-500" /> Trends</h3>
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm text-slate-600">{activeAnalysisClass.analysis.generalTrends}</div>
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-slate-900 mb-4 flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" /> At-Risk Students</h3>
-                    {activeAnalysisClass.analysis.atRiskStudents.length === 0 ? (
-                      <div className="p-4 bg-green-50 text-green-700 rounded-xl text-sm font-medium">No high-risk students identified.</div>
-                    ) : (
-                      <div className="space-y-3">
-                        {activeAnalysisClass.analysis.atRiskStudents.map((s, i) => (
-                          <div key={i} className="bg-white border border-red-100 rounded-xl p-4 shadow-sm">
-                            <div className="flex justify-between items-start mb-2">
-                              <span className="font-bold text-slate-800">{s.name}</span>
-                              <span className="px-2 py-0.5 bg-red-100 text-red-700 text-[10px] font-bold uppercase rounded-full">Action Needed</span>
-                            </div>
-                            <div className="space-y-2">
-                              <p className="text-xs text-slate-500"><strong className="text-slate-700">Issue:</strong> {s.reason}</p>
-                              <p className="text-xs text-slate-500"><strong className="text-slate-700">Intervention:</strong> {s.intervention}</p>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+               </div>
+
+               {/* Analysis Report */}
+               {!activeAnalysisClass.analysis ? (
+                 <div className="text-center py-20 bg-slate-50/50 rounded-3xl border border-dashed border-slate-200">
+                    <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-6 shadow-sm">
+                       <BarChart2 className="w-10 h-10 text-slate-300" />
+                    </div>
+                    <h3 className="text-xl font-bold text-slate-700 mb-2">No Data Available</h3>
+                    <p className="text-slate-500 text-sm max-w-sm mx-auto">Upload student marks to generate deep AI insights and intervention strategies.</p>
+                 </div>
+               ) : (
+                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-gradient-to-br from-indigo-500 to-blue-600 p-8 rounded-3xl text-white shadow-xl shadow-blue-500/20 relative overflow-hidden">
+                       <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/10 rounded-full blur-2xl" />
+                       <h3 className="font-extrabold text-lg mb-3 flex items-center gap-2 tracking-wide"><Sparkles className="w-5 h-5 text-indigo-200" /> Executive Summary</h3>
+                       <p className="text-indigo-50 leading-relaxed font-medium">{activeAnalysisClass.analysis.summary}</p>
+                    </div>
+
+                    <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
+                       <h3 className="font-extrabold text-slate-900 mb-4 flex items-center gap-2 text-lg"><TrendingUp className="w-5 h-5 text-emerald-500" /> Class Performance Trends</h3>
+                       <div className="p-5 bg-emerald-50/50 rounded-2xl text-slate-700 leading-relaxed font-medium">
+                          {activeAnalysisClass.analysis.generalTrends}
+                       </div>
+                    </div>
+
+                    <div>
+                       <h3 className="font-extrabold text-slate-900 mb-6 flex items-center gap-2 text-lg"><AlertTriangle className="w-5 h-5 text-rose-500" /> Intervention Targets</h3>
+                       {activeAnalysisClass.analysis.atRiskStudents.length === 0 ? (
+                         <div className="p-6 bg-emerald-50 text-emerald-700 rounded-2xl font-bold flex items-center justify-center gap-3">
+                            <div className="w-2 h-2 rounded-full bg-emerald-500" /> No high-risk students identified in this batch.
+                         </div>
+                       ) : (
+                         <div className="space-y-4">
+                           {activeAnalysisClass.analysis.atRiskStudents.map((s, i) => (
+                             <div key={i} className="bg-white border hover:border-rose-200 border-slate-100 rounded-2xl p-6 shadow-sm hover:shadow-md transition-shadow">
+                                <div className="flex justify-between items-center mb-4">
+                                   <span className="font-extrabold text-slate-900 text-lg">{s.name}</span>
+                                   <span className="px-3 py-1 bg-rose-100 text-rose-700 text-[10px] font-extrabold uppercase tracking-widest rounded-full">Requires Attention</span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                   <div className="p-4 bg-slate-50 rounded-xl">
+                                      <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Identified Issue</p>
+                                      <p className="text-sm text-slate-700 font-medium">{s.reason}</p>
+                                   </div>
+                                   <div className="p-4 bg-indigo-50/50 rounded-xl">
+                                      <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-wider mb-1">Suggested Intervention</p>
+                                      <p className="text-sm text-indigo-900 font-medium">{s.intervention}</p>
+                                   </div>
+                                </div>
+                             </div>
+                           ))}
+                         </div>
+                       )}
+                    </div>
+                 </div>
+               )}
             </div>
           </div>
         </div>

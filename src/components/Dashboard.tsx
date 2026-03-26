@@ -60,7 +60,19 @@ const Dashboard = () => {
       }
     };
     load();
-  }, [clerkUser]);
+  }, [clerkUser?.id]);
+
+  const refreshUser = useCallback(async () => {
+    try {
+      const userRes = await fetch('/api/user/me');
+      if (userRes.ok) {
+        const { user } = await userRes.json();
+        setDbUser(user);
+      }
+    } catch (err) {
+      console.error('Failed to refresh user:', err);
+    }
+  }, []);
 
   // ─── Persist a classroom update to the DB ────────────────────────────────
   const persistClassroom = useCallback(async (classroomId: string, patch: Partial<Classroom>) => {
@@ -204,7 +216,7 @@ const Dashboard = () => {
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white flex-shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
-            {!isSidebarCollapsed && <span className="font-bold text-white text-lg tracking-tight">EduMaster</span>}
+            {!isSidebarCollapsed && <span className="font-bold text-white text-lg tracking-tight">CurricuGen</span>}
           </div>
         </div>
 
@@ -228,9 +240,12 @@ const Dashboard = () => {
         {/* Credits + User */}
         <div className="border-t border-slate-800 p-4 space-y-3">
           {!isSidebarCollapsed && dbUser && (
-            <div className={`px-3 py-2.5 rounded-xl text-xs font-medium ${dbUser.plan === 'PRO' ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300' : 'bg-slate-800 text-slate-400'}`}>
-              {dbUser.plan === 'PRO' ? (
-                <div className="flex items-center gap-2"><Crown className="w-3.5 h-3.5 text-amber-400" /> Pro Plan — Unlimited</div>
+            <div className={`px-3 py-2.5 rounded-xl text-xs font-medium ${dbUser.plan === 'PRO' ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300' : dbUser.plan === 'BETA' ? 'bg-blue-500/10 border border-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-400'}`}>
+              {dbUser.plan === 'PRO' || dbUser.plan === 'BETA' ? (
+                <div className="flex items-center gap-2">
+                  <Crown className={`w-3.5 h-3.5 ${dbUser.plan === 'PRO' ? 'text-amber-400' : 'text-blue-400'}`} /> 
+                  {dbUser.plan === 'PRO' ? 'Pro Plan' : 'Beta Tester'} — Unlimited
+                </div>
               ) : (
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-1.5"><Zap className="w-3.5 h-3.5" /> {dbUser.generationsLeft} generations left today</span>
@@ -276,6 +291,7 @@ const Dashboard = () => {
               activeClass={activeClass}
               onBack={handleBackToDashboard}
               onSaveClassContent={handleSaveClassLesson}
+              onContentGenerated={refreshUser}
             />
           )}
         </div>

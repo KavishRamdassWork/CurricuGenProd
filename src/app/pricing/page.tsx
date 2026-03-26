@@ -68,7 +68,7 @@ export default function PricingPage() {
             <Sparkles className="w-4 h-4" /> Go Pro
           </div>
           <h1 className="text-4xl md:text-6xl font-extrabold text-white mb-6 tracking-tight leading-tight">
-            Supercharge your teaching with <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">EduMaster Pro</span>
+            Supercharge your teaching with <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">CurricuGen Pro</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-400">
             Stop spending hours strictly planning. Get unlimited access to AI curriculum generation, saving you 15+ hours every week.
@@ -126,7 +126,7 @@ export default function PricingPage() {
 
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
-                EduMaster Pro <Zap className="w-5 h-5 text-amber-400 fill-amber-400/20" />
+                CurricuGen Pro <Zap className="w-5 h-5 text-amber-400 fill-amber-400/20" />
               </h2>
               <div className="flex items-baseline gap-2 mb-4">
                 <span className="text-5xl font-extrabold text-white">$9.99</span>
