@@ -9,7 +9,7 @@ export async function GET() {
 
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: user.id },
-    select: { id: true, email: true, name: true, plan: true, generationsLeft: true, createdAt: true },
+    select: { id: true, email: true, name: true, plan: true, generationsLeft: true, imagesLeft: true, createdAt: true },
   });
 
   // Auto-create user if webhook hasn't fired yet (race condition safety)
@@ -22,21 +22,22 @@ export async function GET() {
       .split(",")
       .map((e) => e.trim())
       .filter(Boolean);
-      
+
     const isBeta = email && betaEmails.includes(email.toLowerCase());
     const plan = (isBeta ? 'BETA' : 'FREE') as any;
 
     try {
       dbUser = await prisma.user.create({
-        data: { 
-          clerkId: user.id, 
-          email, 
-          name, 
-          plan, 
+        data: {
+          clerkId: user.id,
+          email,
+          name,
+          plan,
           generationsLeft: 10,
+          imagesLeft: 1,
           lastGenerationDate: new Date()
         },
-        select: { id: true, email: true, name: true, plan: true, generationsLeft: true, createdAt: true },
+        select: { id: true, email: true, name: true, plan: true, generationsLeft: true, imagesLeft: true, createdAt: true },
       });
     } catch (err) {
       console.error('Failed to auto-create user', err);
