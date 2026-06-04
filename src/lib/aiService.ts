@@ -204,21 +204,28 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
     Create a ${sanitizeInput(type).toUpperCase()} STUDENT WORKSHEET for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
     Topic: ${sanitizeInput(unit.topicTitle)}
-    
-    Class Average: ${classroom.averagePercentile}% (Adjust difficulty).
-    ${classroom.accommodations ? `Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${classroom.studentInterests ? `Incorporate these interests if possible: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
-    ${userInstruction ? `IMPORTANT USER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
-    ${file ? "Reference the attached document for question styles and terminology." : ""}
 
-    Requirements:
-    - Title: ${sanitizeInput(unit.topicTitle)} - ${sanitizeInput(type)} Worksheet
-    - Instructions for students
-    - **Section A**: Basic Understanding (Recall)
-    - **Section B**: Application (Problem Solving)
-    - **Section C**: Challenge (Critical Thinking)
-    
-    Format: Print-ready Markdown. DO NOT INCLUDE ANSWERS.
+    Class Average: ${classroom.averagePercentile}% — adjust difficulty accordingly.
+    ${classroom.accommodations ? `Accommodations (apply throughout): ${sanitizeInput(classroom.accommodations, 300)}` : ""}
+    ${classroom.studentInterests ? `Incorporate these interests in examples where possible: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
+    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
+    ${file ? "Reference the attached document for question styles, terminology, and worked examples." : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order. Do not include answers.
+
+    # ${sanitizeInput(unit.topicTitle)} — ${sanitizeInput(type)} Worksheet
+    **Subject:** ${sanitizeInput(classroom.subject)} &nbsp;&nbsp; **Grade:** ${sanitizeInput(classroom.grade)} &nbsp;&nbsp; **Total:** [X] marks &nbsp;&nbsp; **Time:** [X] minutes
+
+    ---
+
+    ## Section A — Basic Understanding ([X] marks)
+    [Recall and knowledge questions. Use multiple choice or short-answer format. Each question worth 1–2 marks.]
+
+    ## Section B — Application ([X] marks)
+    [Problem-solving questions requiring working to be shown. Each question worth 3–5 marks.]
+
+    ## Section C — Challenge ([X] marks)
+    [Critical thinking and extension questions. Each question worth 5+ marks.]
   `;
 
   const parts: any[] = [{ text: basePrompt }];
@@ -235,23 +242,32 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
 export async function generateAssignmentServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile, userInstruction?: string): Promise<string> {
   const ai = getAIClient();
   const basePrompt = `
-    Create a RELEVANT HOMEWORK ASSIGNMENT for:
+    Create a HOMEWORK ASSIGNMENT for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
     Topic: ${sanitizeInput(unit.topicTitle)}
-    
+    Learning Outcome: ${sanitizeInput(unit.learningOutcome)}
+
     Class Notes: ${sanitizeInput(classroom.teachingNotes, 300)}
     ${classroom.accommodations ? `Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
     ${classroom.learningStyles?.length ? `Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
     ${classroom.studentInterests ? `Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
-    ${userInstruction ? `IMPORTANT USER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
-    
-    Requirements:
-    - Step-by-step instructions.
-    - Tasks that specifically reinforce: ${sanitizeInput(unit.learningOutcome)}.
-    - Due Date Placeholder.
-    - Assessment Rubric.
-    
-    Format: Print-ready Markdown.
+    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order.
+
+    # ${sanitizeInput(unit.topicTitle)} — Assignment
+    **Subject:** ${sanitizeInput(classroom.subject)} &nbsp;&nbsp; **Grade:** ${sanitizeInput(classroom.grade)} &nbsp;&nbsp; **Due Date:** _______________
+
+    ---
+
+    ## Section A — Instructions
+    [Clear step-by-step instructions for the assignment. What to do, how to submit, and what resources are permitted.]
+
+    ## Section B — Tasks
+    [The actual tasks or questions. Number each task clearly. Include mark allocations per task.]
+
+    ## Section C — Assessment Rubric
+    [A table with: Criteria | Excellent | Satisfactory | Needs Improvement | Marks. Cover the key learning outcome.]
   `;
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
@@ -272,23 +288,32 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
   }
 
   const basePrompt = `
-    Create a FORMAL TEST / EXAM for:
+    Create a FORMAL TEST / ASSESSMENT for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
-    
+
     SCOPE:
     ${scopeText}
-    
-    Class Average: ${classroom.averagePercentile}% (Ensure appropriate difficulty curve).
-    ${classroom.accommodations ? `MUST INCLUDE Accommodations for: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${userInstruction ? `IMPORTANT USER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
 
-    Requirements:
-    - Total Marks (e.g., 50)
-    - Time Allowance
-    - Variety of Question Types (MCQ, Short Answer, Essay).
-    - Professional layout.
-    
-    Format: Print-ready Markdown. DO NOT INCLUDE ANSWERS here.
+    Class Average: ${classroom.averagePercentile}% — ensure an appropriate difficulty curve across sections.
+    ${classroom.accommodations ? `MUST INCLUDE accommodations for: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
+    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
+    ${file ? "Reference the attached document for question style and terminology." : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order. Do not include answers.
+
+    # ${sanitizeInput(classroom.subject)} — Formal Assessment
+    **Grade:** ${sanitizeInput(classroom.grade)} &nbsp;&nbsp; **Total:** [X] marks &nbsp;&nbsp; **Time:** [X] minutes
+
+    ---
+
+    ## Section A — Multiple Choice ([X] marks)
+    [MCQ questions worth 2 marks each. Include 4 options labelled A–D. Each question on its own line with Answer: ( ) at the end.]
+
+    ## Section B — Short Answer ([X] marks)
+    [Questions requiring brief written responses or calculations with working shown. Show mark allocation per question in [brackets].]
+
+    ## Section C — Extended Response ([X] marks)
+    [Essay-style or extended problem questions. Show mark allocation and include any scaffolding prompts.]
   `;
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
@@ -304,18 +329,32 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
 export async function generateMemoServer(contentToGrade: string, classroom: Classroom): Promise<string> {
   const ai = getAIClient();
   const prompt = `
-    Create a COMPREHENSIVE MEMORANDUM (ANSWER KEY) for the following assessment/worksheet.
+    Create a COMPREHENSIVE MEMORANDUM (ANSWER KEY) for the following assessment or worksheet.
     Subject: ${sanitizeInput(classroom.subject)}
     Grade: ${sanitizeInput(classroom.grade)}
 
-    CONTENT TO GRADE:
+    CONTENT TO MARK:
     ${contentToGrade.slice(0, 8000)}
 
-    INSTRUCTIONS:
-    - Provide clear, accurate answers.
-    - Include mark allocations.
-    - Show working out for math/science.
-    - Format as a clear table or list.
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order.
+
+    # Memorandum — Answer Key
+    **Subject:** ${sanitizeInput(classroom.subject)} &nbsp;&nbsp; **Grade:** ${sanitizeInput(classroom.grade)}
+    **CONFIDENTIAL — For Teacher Use Only**
+
+    ---
+
+    ## Marking Guidelines
+    [General marking principles: accuracy requirements, acceptable alternative answers, method marks policy]
+
+    ## Section A — Answers
+    [Numbered answers matching the assessment. For MCQ: state the correct letter and briefly explain why. Show mark per question.]
+
+    ## Section B — Answers
+    [Full model answers with working shown step-by-step. Indicate where method marks apply.]
+
+    ## Section C — Answers
+    [Model answers or marking rubric. For extended responses, describe what earns each mark band.]
   `;
 
   const response = await ai.models.generateContent({
