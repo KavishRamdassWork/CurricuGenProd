@@ -14,7 +14,7 @@ const limiter = buildRateLimit({
 });
 
 export type GuardResult =
-  | { ok: true; dbUser: { id: string; plan: string; generationsLeft: number } }
+  | { ok: true; dbUser: { id: string; plan: string; generationsLeft: number; imagesLeft?: number } }
   | { ok: false; response: NextResponse };
 
 export async function requireGenerationAccess(): Promise<GuardResult> {
@@ -105,6 +105,16 @@ export async function requireImageAccess(): Promise<GuardResult> {
     };
   }
 
+  try {
+    // Rate limit: max 3 image generation attempts per minute per user
+    await limiter.check(3, userId);
+  } catch {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 }),
+    };
+  }
+
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: userId },
     select: { id: true, plan: true, imagesLeft: true, lastImageDate: true },
@@ -150,9 +160,7 @@ export async function requireImageAccess(): Promise<GuardResult> {
     };
   }
 
-  // Note: generationsLeft field reused for API compatibility with GuardResult type.
-  // Its value here represents imagesLeft.
-  return { ok: true, dbUser: { id: dbUser.id, plan: dbUser.plan, generationsLeft: dbUser.imagesLeft } };
+  return { ok: true, dbUser: { id: dbUser.id, plan: dbUser.plan, generationsLeft: 0, imagesLeft: dbUser.imagesLeft } };
 }
 
 export async function consumeImageGeneration(userId: string): Promise<void> {
