@@ -85,10 +85,82 @@ export async function consumeGeneration(userId: string, plan: string) {
   if (plan === 'FREE') {
     await prisma.user.update({
       where: { id: userId },
-      data: { 
+      data: {
         generationsLeft: { decrement: 1 },
         lastGenerationDate: new Date()
       },
     });
   }
+}
+
+const IMAGE_LIMITS: Record<string, number> = { FREE: 1, PRO: 10, BETA: 10 };
+
+export async function requireImageAccess(): Promise<GuardResult> {
+  const { userId } = await auth();
+
+  if (!userId) {
+    return {
+      ok: false,
+      response: NextResponse.json({ error: 'Unauthorized — please sign in.' }, { status: 401 }),
+    };
+  }
+
+  let dbUser = await prisma.user.findUnique({
+    where: { clerkId: userId },
+    select: { id: true, plan: true, imagesLeft: true, lastImageDate: true },
+  });
+
+  if (!dbUser) {
+    dbUser = await prisma.user.create({
+      data: {
+        clerkId: userId,
+        email: '',
+        plan: 'FREE',
+        generationsLeft: 10,
+        imagesLeft: 1,
+        lastGenerationDate: new Date(),
+        lastImageDate: new Date(),
+      },
+      select: { id: true, plan: true, imagesLeft: true, lastImageDate: true },
+    });
+  }
+
+  const dailyLimit = IMAGE_LIMITS[dbUser.plan] ?? 1;
+  const today = new Date().toDateString();
+  const lastImage = dbUser.lastImageDate?.toDateString();
+
+  if (lastImage !== today) {
+    dbUser = await prisma.user.update({
+      where: { id: dbUser.id },
+      data: { imagesLeft: dailyLimit, lastImageDate: new Date() },
+      select: { id: true, plan: true, imagesLeft: true, lastImageDate: true },
+    });
+  }
+
+  if (dbUser.imagesLeft <= 0) {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        {
+          error: 'Daily image limit reached. Come back tomorrow or upgrade to Pro.',
+          code: 'IMAGE_LIMIT_REACHED',
+        },
+        { status: 402 }
+      ),
+    };
+  }
+
+  // Note: generationsLeft field reused for API compatibility with GuardResult type.
+  // Its value here represents imagesLeft.
+  return { ok: true, dbUser: { id: dbUser.id, plan: dbUser.plan, generationsLeft: dbUser.imagesLeft } };
+}
+
+export async function consumeImageGeneration(userId: string): Promise<void> {
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      imagesLeft: { decrement: 1 },
+      lastImageDate: new Date(),
+    },
+  });
 }
