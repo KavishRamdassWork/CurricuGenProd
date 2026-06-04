@@ -16,12 +16,13 @@ interface LessonWorkspaceProps {
   onBack: () => void;
   onSaveClassContent: (classId: string, unitId: string, content: any) => void;
   onContentGenerated?: () => void;
+  imagesLeft: number;
 }
 
 type MainTab = 'plan' | 'slides' | 'game' | 'resources' | 'visuals';
 type ResourceType = 'worksheet' | 'assignment' | 'test';
 
-const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, onBack, onSaveClassContent, onContentGenerated }) => {
+const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, onBack, onSaveClassContent, onContentGenerated, imagesLeft }) => {
   const isRevisionMode = units.length > 1;
   const unitKey = isRevisionMode ? `revision-${units.map(u => u.weekNumber).join('-')}` : `${units[0].weekNumber}-${units[0].topicTitle}`;
 
@@ -55,20 +56,43 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   const logoInputRef = useRef<HTMLInputElement>(null);
   const [isDownloadOpen, setIsDownloadOpen] = useState(false);
   const [isDownloadLoading, setIsDownloadLoading] = useState(false);
+  const [imageDescription, setImageDescription] = useState('');
+  const [slideImages, setSlideImages] = useState<{ slideNumber: number; imageUrl: string }[]>([]);
+  const [isGeneratingSlideImages, setIsGeneratingSlideImages] = useState(false);
+  const [slideImageProgress, setSlideImageProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
     const saved = activeClass.savedLessons?.[unitKey];
     if (saved) {
-      setLessonPlan(saved.plan || null); setSlides(saved.slides || null);
-      setWorksheets(saved.worksheets || []); setAssignments(saved.assignments || []); setTests(saved.tests || []);
+      setLessonPlan(saved.plan || null);
+      setSlides(saved.slides || null);
+      setWorksheets(saved.worksheets || []);
+      setAssignments(saved.assignments || []);
+      setTests(saved.tests || []);
+      setGeneratedImageUrl(saved.imageUrl || null);
+      setSlideImages(saved.slideImages || []);
     } else {
-      setLessonPlan(null); setSlides(null); setWorksheets([]); setAssignments([]); setTests([]);
+      setLessonPlan(null);
+      setSlides(null);
+      setWorksheets([]);
+      setAssignments([]);
+      setTests([]);
+      setGeneratedImageUrl(null);
+      setSlideImages([]);
     }
   }, [activeClass.id, unitKey]);
 
   useEffect(() => {
-    onSaveClassContent(activeClass.id, unitKey, { plan: lessonPlan || '', slides: slides || '', worksheets, assignments, tests });
-  }, [lessonPlan, slides, worksheets, assignments, tests]);
+    onSaveClassContent(activeClass.id, unitKey, {
+      plan: lessonPlan || '',
+      slides: slides || '',
+      worksheets,
+      assignments,
+      tests,
+      imageUrl: generatedImageUrl || '',
+      slideImages,
+    });
+  }, [lessonPlan, slides, worksheets, assignments, tests, generatedImageUrl, slideImages]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -260,6 +284,77 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
     }
   };
 
+  const handleGenerateImage = async () => {
+    setLoading(true);
+    try {
+      const url = await generateEducationalImage(units[0], imageDescription.trim() || undefined);
+      setGeneratedImageUrl(url);
+      onContentGenerated?.();
+    } catch (e: any) {
+      if (e.code === 'IMAGE_LIMIT_REACHED') {
+        alert('Daily image limit reached. Resets tomorrow. Upgrade to Pro for 10 images/day.');
+      } else if (e.code === 'SAFETY_BLOCK') {
+        alert('Image could not be generated — try rephrasing your description.');
+      } else {
+        alert(e.message || 'Image generation is temporarily unavailable. Try again shortly.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateSlideImages = async () => {
+    if (!slides) return;
+    const slideMatches = [...slides.matchAll(/^## Slide (\d+):\s*(.+)$/gm)];
+    if (slideMatches.length === 0) {
+      alert('No slides found. Generate slide content first, then come back to generate images.');
+      return;
+    }
+    setIsGeneratingSlideImages(true);
+    setSlideImageProgress({ current: 0, total: slideMatches.length });
+    const newImages: { slideNumber: number; imageUrl: string }[] = [];
+    let generated = 0;
+    for (const match of slideMatches) {
+      const slideNumber = parseInt(match[1]);
+      const slideTitle = match[2].trim();
+      try {
+        const url = await generateEducationalImage(
+          units[0],
+          `Educational illustration for a classroom slide titled: "${slideTitle}"`
+        );
+        newImages.push({ slideNumber, imageUrl: url });
+        generated++;
+        setSlideImageProgress(prev => ({ ...prev, current: generated }));
+        onContentGenerated?.();
+      } catch (e: any) {
+        if (e.code === 'IMAGE_LIMIT_REACHED') break;
+        console.error(`Failed slide ${slideNumber}:`, e);
+      }
+    }
+    setSlideImages(prev => {
+      const merged = [...prev];
+      for (const img of newImages) {
+        const idx = merged.findIndex(s => s.slideNumber === img.slideNumber);
+        if (idx >= 0) merged[idx] = img;
+        else merged.push(img);
+      }
+      return merged.sort((a, b) => a.slideNumber - b.slideNumber);
+    });
+    if (generated < slideMatches.length) {
+      alert(`Generated ${generated} of ${slideMatches.length} slide images — daily limit reached. Resets tomorrow.`);
+    }
+    setIsGeneratingSlideImages(false);
+  };
+
+  const handleImageDownload = (imageUrl: string, filename: string) => {
+    const a = document.createElement('a');
+    a.href = imageUrl;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const DocumentHeader = () => {
     if (!templateConfig.logo && !templateConfig.schoolName) return null;
     return (
@@ -426,18 +521,124 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                 <p className="text-slate-500 font-medium">Drafting content...</p>
               </div>
             )}
-            <div className="p-12 lg:p-16 print:p-0">
+            <div className={`p-12 lg:p-16 print:p-0 ${isRefining ? 'is-refining' : ''}`}>
               <DocumentHeader />
               {activeSection === 'plan' && (lessonPlan ? <div className="markdown-body"><RenderMarkdown docType="teacher">{lessonPlan}</RenderMarkdown></div> : <EmptyState icon={BookOpen} label="Lesson Plan" action={() => handleGenerateMain('plan')} />)}
               {activeSection === 'slides' && (slides ? <div className="markdown-body"><RenderMarkdown docType="teacher">{slides}</RenderMarkdown></div> : <EmptyState icon={MonitorPlay} label="Slide Outline" action={() => handleGenerateMain('slides')} />)}
               {activeSection === 'visuals' && (
-                <div className="flex flex-col items-center justify-center py-32 text-center opacity-80">
-                  <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mb-4">
-                    <ImageIcon className="w-8 h-8 text-blue-400" />
+                <div className="space-y-8 py-4">
+                  {/* Single image generation */}
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-lg font-bold text-slate-800 mb-1">Generate Visual Aid</h3>
+                      <p className="text-sm text-slate-500 mb-4">Describe the educational illustration you need for this topic.</p>
+                      <textarea
+                        value={imageDescription}
+                        onChange={e => setImageDescription(e.target.value)}
+                        placeholder={`e.g. "A labelled diagram of the water cycle" or "A timeline showing key events"`}
+                        className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl h-28 resize-none focus:bg-white outline-none focus:ring-2 focus:ring-blue-500/20 text-sm"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={handleGenerateImage}
+                        disabled={loading || imagesLeft <= 0}
+                        className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 text-white font-bold rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 shadow-lg shadow-blue-500/20"
+                      >
+                        {loading
+                          ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          : <ImageIcon className="w-4 h-4" />
+                        }
+                        Generate Image
+                      </button>
+                      <span className={`text-xs font-bold ${imagesLeft <= 0 ? 'text-red-500' : 'text-slate-400'}`}>
+                        {imagesLeft <= 0
+                          ? '0 remaining · Resets tomorrow'
+                          : `${imagesLeft} image${imagesLeft === 1 ? '' : 's'} remaining today`
+                        }
+                      </span>
+                    </div>
+
+                    {generatedImageUrl && (
+                      <div className="space-y-3">
+                        <img
+                          src={generatedImageUrl}
+                          alt="Generated visual aid"
+                          className="w-full rounded-xl border border-slate-200 shadow-sm"
+                        />
+                        <div className="flex gap-3">
+                          <button
+                            onClick={() => handleImageDownload(
+                              generatedImageUrl,
+                              `visual-aid-${units[0].topicTitle.replace(/\s+/g, '-').toLowerCase()}.jpg`
+                            )}
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white text-sm font-bold rounded-lg hover:bg-slate-800 transition-colors"
+                          >
+                            <Download className="w-4 h-4" /> Download Image
+                          </button>
+                          <button
+                            onClick={handleGenerateImage}
+                            disabled={loading || imagesLeft <= 0}
+                            className="flex items-center gap-2 px-4 py-2 bg-slate-100 text-slate-700 text-sm font-bold rounded-lg hover:bg-slate-200 transition-colors disabled:opacity-50"
+                          >
+                            ↺ Regenerate
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <h3 className="text-2xl font-bold text-slate-800 mb-2">Visual Elements</h3>
-                  <p className="text-slate-500 max-w-sm mb-6">We are currently upgrading our image generation engine. This feature will be available soon!</p>
-                  <div className="px-4 py-1.5 bg-blue-100 text-blue-700 text-xs font-bold uppercase tracking-wider rounded-full">Coming Soon</div>
+
+                  {/* Slide images section — only shown when slides exist */}
+                  {slides && (
+                    <div className="border-t border-slate-200 pt-8 space-y-4">
+                      <div>
+                        <h3 className="text-lg font-bold text-slate-800 mb-1">Slide Images</h3>
+                        <p className="text-sm text-slate-500">Generate one illustration per slide. Each image uses 1 daily credit.</p>
+                      </div>
+
+                      {isGeneratingSlideImages ? (
+                        <div className="flex items-center gap-3 text-sm text-slate-600 py-2">
+                          <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin flex-shrink-0" />
+                          Generating slide images… ({slideImageProgress.current}/{slideImageProgress.total} complete)
+                        </div>
+                      ) : (
+                        <button
+                          onClick={handleGenerateSlideImages}
+                          disabled={imagesLeft <= 0 || isGeneratingSlideImages}
+                          className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 transition-colors disabled:opacity-50 shadow-lg shadow-indigo-500/20"
+                        >
+                          <ImageIcon className="w-4 h-4" />
+                          Generate Slide Images
+                        </button>
+                      )}
+
+                      {slideImages.length > 0 && (
+                        <div className="space-y-6">
+                          {slideImages.map(({ slideNumber, imageUrl }) => (
+                            <div key={slideNumber} className="space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Slide {slideNumber}</span>
+                                <button
+                                  onClick={() => handleImageDownload(
+                                    imageUrl,
+                                    `slide-${slideNumber}-${units[0].topicTitle.replace(/\s+/g, '-').toLowerCase()}.jpg`
+                                  )}
+                                  className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-800 transition-colors"
+                                >
+                                  <Download className="w-3 h-3" /> Download
+                                </button>
+                              </div>
+                              <img
+                                src={imageUrl}
+                                alt={`Slide ${slideNumber} illustration`}
+                                className="w-full rounded-lg border border-slate-200 shadow-sm"
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               {activeSection === 'game' && (game ? <div className="markdown-body"><RenderMarkdown docType="teacher">{game}</RenderMarkdown></div> : <EmptyState icon={Gamepad2} label="Activity / Game" action={() => handleGenerateMain('game')} />)}
