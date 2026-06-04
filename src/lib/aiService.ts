@@ -243,7 +243,7 @@ export async function generateAssignmentServer(classroom: Classroom, unit: WeekU
   const ai = getAIClient();
   const basePrompt = `
     Create a HOMEWORK ASSIGNMENT for:
-    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
+    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
     Topic: ${sanitizeInput(unit.topicTitle)}
     Learning Outcome: ${sanitizeInput(unit.learningOutcome)}
 
@@ -307,7 +307,7 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
     ---
 
     ## Section A — Multiple Choice ([X] marks)
-    [MCQ questions worth 2 marks each. Include 4 options labelled A–D. Each question on its own line with Answer: ( ) at the end.]
+    [MCQ questions worth 2 marks each. Include 4 options labelled A–D. Each question on its own line. End each question with an empty answer line: "Answer: ___" — leave it blank, do NOT fill in the answer.]
 
     ## Section B — Short Answer ([X] marks)
     [Questions requiring brief written responses or calculations with working shown. Show mark allocation per question in [brackets].]
@@ -347,14 +347,8 @@ export async function generateMemoServer(contentToGrade: string, classroom: Clas
     ## Marking Guidelines
     [General marking principles: accuracy requirements, acceptable alternative answers, method marks policy]
 
-    ## Section A — Answers
-    [Numbered answers matching the assessment. For MCQ: state the correct letter and briefly explain why. Show mark per question.]
-
-    ## Section B — Answers
-    [Full model answers with working shown step-by-step. Indicate where method marks apply.]
-
-    ## Section C — Answers
-    [Model answers or marking rubric. For extended responses, describe what earns each mark band.]
+    ## Answers
+    [For EACH section and question in the CONTENT TO MARK above, provide the model answer in the same section order as the source document. Use the same section headings as the source (e.g. if source has "Section A — Multiple Choice", mirror that heading here). Show mark allocations. For calculations, show full working. For MCQ, state the correct option letter and a brief reason.]
   `;
 
   const response = await ai.models.generateContent({
