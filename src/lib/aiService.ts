@@ -23,18 +23,22 @@ Your goal is to provide structured, curriculum-aligned content.
 `;
 
 // ─── Model Configuration ────────────────────────────────────────────────────
-// Update these constants when migrating to a new model generation.
-// gemini-2.0-flash was deprecated June 1 2026.
-// gemini-2.5-flash is the current migration target ($0.30/$2.50 per 1M tokens).
-// Next cutover: gemini-2.5-flash → October 16 2026. Check ai.google.dev/gemini-api/docs/deprecations.
-const GENERATION_MODEL = 'gemini-2.5-flash';
-const EMBEDDING_MODEL  = 'text-embedding-004';   // stable, no announced deprecation
+// Update GENERATION_MODEL here when Google announces a deprecation.
+// Check: ai.google.dev/gemini-api/docs/deprecations
+//
+// History:
+//   gemini-2.0-flash     → deprecated/retired June 1 2026
+//   gemini-2.5-flash     → deprecated October 16 2026
+//   gemini-3.5-flash     → active as of May 19 2026, no announced deprecation
+//                           Pricing: $1.50 input / $9.00 output per 1M tokens
+const GENERATION_MODEL = 'gemini-3.5-flash';
+const EMBEDDING_MODEL  = 'text-embedding-004';      // stable, no announced deprecation
 const IMAGE_MODEL      = 'imagen-3.0-generate-001'; // only used when image feature is enabled
 
-// Thinking budget: Gemini 2.5 Flash can "think" before responding (billed as output tokens).
-// Enable only for high-accuracy tasks (blueprint, formal assessment).
-// Cost: 2048 thinking tokens ≈ $0.005 extra per call — acceptable for these critical generations.
-const THINKING_BUDGET_HIGH = 2048;  // blueprint, formal assessment
+// Thinking budget: Gemini 3.5 Flash supports thinking tokens (billed as output tokens).
+// Enabled only for high-accuracy tasks (blueprint, formal assessment) where quality
+// matters more than the small extra cost (~$0.018 per call at $9/1M output).
+const THINKING_BUDGET_HIGH = 2048;
 
 export function getAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
