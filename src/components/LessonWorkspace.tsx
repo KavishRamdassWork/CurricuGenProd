@@ -367,49 +367,53 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                 <ChevronDown className={`w-3 h-3 transition-transform ${isDownloadOpen ? 'rotate-180' : ''}`} />
               </button>
 
-              {isDownloadOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setIsDownloadOpen(false)} />
-                  <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                    <button
-                      onClick={handlePdfDownload}
-                      disabled={!getCurrentExport().content}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      title={!getCurrentExport().content ? 'Generate content first' : undefined}
-                    >
-                      <FileText className="w-4 h-4 text-red-500" />
-                      <div className="text-left">
-                        <div className="font-bold">Download as PDF</div>
-                        <div className="text-xs text-slate-400">Print-ready document</div>
-                      </div>
-                    </button>
-                    <div className="border-t border-slate-100" />
-                    <button
-                      onClick={handleDocxDownload}
-                      disabled={!getCurrentExport().content}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                      title={!getCurrentExport().content ? 'Generate content first' : undefined}
-                    >
-                      <FileText className="w-4 h-4 text-blue-500" />
-                      <div className="text-left">
-                        <div className="font-bold">Download as Word</div>
-                        <div className="text-xs text-slate-400">Editable .docx file</div>
-                      </div>
-                    </button>
-                    <div className="border-t border-slate-100" />
-                    <button
-                      onClick={handlePdfDownload}
-                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-                    >
-                      <Printer className="w-4 h-4 text-slate-400" />
-                      <div className="text-left">
-                        <div className="font-bold">Print</div>
-                        <div className="text-xs text-slate-400">Open print dialog</div>
-                      </div>
-                    </button>
-                  </div>
-                </>
-              )}
+              {isDownloadOpen && (() => {
+                const exportData = getCurrentExport();
+                const hasContent = !!exportData.content;
+                return (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setIsDownloadOpen(false)} />
+                    <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                      <button
+                        onClick={handlePdfDownload}
+                        disabled={!hasContent}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={!hasContent ? 'Generate content first' : undefined}
+                      >
+                        <FileText className="w-4 h-4 text-red-500" />
+                        <div className="text-left">
+                          <div className="font-bold">Download as PDF</div>
+                          <div className="text-xs text-slate-400">Print-ready document</div>
+                        </div>
+                      </button>
+                      <div className="border-t border-slate-100" />
+                      <button
+                        onClick={handleDocxDownload}
+                        disabled={!hasContent}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        title={!hasContent ? 'Generate content first' : undefined}
+                      >
+                        <FileText className="w-4 h-4 text-blue-500" />
+                        <div className="text-left">
+                          <div className="font-bold">Download as Word</div>
+                          <div className="text-xs text-slate-400">Editable .docx file</div>
+                        </div>
+                      </button>
+                      <div className="border-t border-slate-100" />
+                      <button
+                        onClick={handlePdfDownload}
+                        className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                      >
+                        <Printer className="w-4 h-4 text-slate-400" />
+                        <div className="text-left">
+                          <div className="font-bold">Print</div>
+                          <div className="text-xs text-slate-400">Open print dialog</div>
+                        </div>
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
