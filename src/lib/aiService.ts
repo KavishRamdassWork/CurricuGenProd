@@ -3,7 +3,18 @@ import { Blueprint, WeekUnit, UploadedFile, Student, ClassAnalysis, Classroom } 
 import { Pinecone } from '@pinecone-database/pinecone';
 import { getPhaseForGrade } from './curriculumHelper';
 
-const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY || '' });
+// Lazy initialization of Pinecone to avoid build-time errors if API key is missing
+let pc: Pinecone | null = null;
+const getPinecone = () => {
+  if (!pc) {
+    if (!process.env.PINECONE_API_KEY) {
+      console.warn("PINECONE_API_KEY is not set.");
+      return null;
+    }
+    pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+  }
+  return pc;
+};
 const indexName = process.env.PINECONE_INDEX_NAME || '';
 
 const SYSTEM_INSTRUCTION = `
@@ -39,7 +50,9 @@ export async function getCurriculumContext(classroom: Classroom, topic: string):
     const embedding = response.embeddings?.[0]?.values;
     if (!embedding) return "";
 
-    const index = pc.Index(indexName);
+    const pinecone = getPinecone();
+    if (!pinecone) return "";
+    const index = pinecone.Index(indexName);
     const queryResponse = await index.query({
       vector: embedding,
       topK: 3,
@@ -89,7 +102,7 @@ export async function generateBlueprintServer(classroom: Classroom): Promise<Blu
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
@@ -138,39 +151,47 @@ export async function generateLessonPlanServer(classroom: Classroom, units: Week
 
     CLASS SPECIFICS:
     - Size: ${classroom.studentCount} students
-    - Performance Level: ${classroom.averagePercentile}%
+    - Performance Level: ${classroom.averagePercentile}% (adjust difficulty accordingly)
     - Notes: ${sanitizeInput(classroom.teachingNotes, 500)}
     ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
     ${classroom.accommodations ? `- Accommodations Needed (CRITICAL): ${sanitizeInput(classroom.accommodations, 300)}` : ""}
     ${classroom.studentInterests ? `- Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
-    (Tailor the activities and timing to suit this specific group. If interests are provided, weave them into the lesson examples.)
+    (Tailor every activity, example, and timing to this specific group.)
 
-    ${file ? "CRITICAL: A reference document (textbook/booklet) has been provided. You MUST use the terminology, methods, and concepts found in this document to ensure alignment." : ""}
-    ${contextText ? `OFFICIAL CURRICULUM CONTEXT: The following texts outline the official standard for this topic. YOU MUST ADHERE TO THIS:\n${contextText}` : ""}
-    
-    REQUIRED OUTPUT SECTIONS (Markdown):
-    1. **Lesson Objective** & **Success Criteria**
-    2. **Key Concepts/Vocab**
-    3. **Materials Needed**
-    4. **Misconceptions**: Common student errors.
-    5. **Differentiation Strategies**:
-       - Support (for struggling learners)
-       - Extension (for advanced learners)
-    6. **Teaching Methodology**:
-       - **Introduction/Hook** (Time)
-       - **Direct Instruction** (Step-by-step)
-       - **Guided Practice**
-       - **Independent Practice**
-       - **Closure**
-    
-    Format: Clean, professional Markdown.
+    ${file ? "CRITICAL: A reference document has been provided. YOU MUST use its terminology, methods, and worked examples to ensure alignment." : ""}
+
+    ──────────────────────────────────────────
+    ${contextText ? `OFFICIAL CURRICULUM CONTEXT — YOU MUST ADHERE TO THIS:\n${contextText}\n──────────────────────────────────────────` : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these ## headings in EXACTLY this order. Do not add, rename, reorder, or remove any heading. Write freely within each section.
+
+    ## Objective & Success Criteria
+    [Lesson objective and 2–3 measurable success criteria]
+
+    ## Key Concepts & Vocabulary
+    [Key terms with brief definitions]
+
+    ## Materials Needed
+    [All required materials, resources, and handouts]
+
+    ## Common Misconceptions
+    [2–3 typical student errors or misconceptions for this topic with how to address them]
+
+    ## Differentiation Strategies
+    [Support strategies for struggling learners AND extension activities for advanced learners]
+
+    ## Lesson Flow
+    [Full lesson activities with time allocations — Hook/Introduction, Direct Instruction with step-by-step worked examples, Guided Practice, Independent Practice]
+
+    ## Closure & Exit Ticket
+    [How to close the lesson and the exit ticket activity]
   `;
 
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
   });
@@ -204,7 +225,7 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
   });
@@ -236,7 +257,7 @@ export async function generateAssignmentServer(classroom: Classroom, unit: WeekU
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.5 }
   });
@@ -273,7 +294,7 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.3 }
   });
@@ -298,7 +319,7 @@ export async function generateMemoServer(contentToGrade: string, classroom: Clas
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: prompt,
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.2 }
   });
@@ -308,21 +329,47 @@ export async function generateMemoServer(contentToGrade: string, classroom: Clas
 export async function generatePresentationServer(classroom: Classroom, units: WeekUnit[]): Promise<string> {
   const ai = getAIClient();
   const prompt = `
-    Create a Presentation Outline for:
+    Create a SLIDE DECK OUTLINE for:
     Topic: ${sanitizeInput(units[0].topicTitle)}
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
-    Student Level: ${classroom.averagePercentile}% avg.
+    Student Level: ${classroom.averagePercentile}% average.
+    ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
 
-    Format as a slide deck outline.
-    For each slide include:
-    - Title
-    - Bullet points for students
-    - Teacher Speaker Notes
-    - Suggested Visuals
+    OUTPUT FORMAT — CRITICAL: Repeat this EXACT pattern for every slide. Do not vary the structure.
+
+    ## Slide 1: [Title Slide]
+    ### Content
+    - [Title of topic]
+    - [Subtitle or hook question]
+    ### Speaker Notes
+    [What the teacher says to open, timing for this slide]
+    ### Suggested Visual
+    [Description of image, diagram, or visual to display]
+
+    ## Slide 2: [Learning Objectives]
+    ### Content
+    - [Objective 1]
+    - [Objective 2]
+    - [Objective 3]
+    ### Speaker Notes
+    [Talking points]
+    ### Suggested Visual
+    [Visual description]
+
+    [Continue for as many slides as needed to cover the topic thoroughly — minimum 6 slides]
+
+    ## Slide [N]: Summary & Exit Ticket
+    ### Content
+    - [3 key takeaways]
+    - Exit ticket question: [question]
+    ### Speaker Notes
+    [Closing remarks and how to run the exit ticket]
+    ### Suggested Visual
+    [Summary graphic or mind map description]
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: prompt,
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
   });
@@ -332,21 +379,43 @@ export async function generatePresentationServer(classroom: Classroom, units: We
 export async function generateGameServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile): Promise<string> {
   const ai = getAIClient();
   const basePrompt = `
-    Design an engaging CLASSROOM GAME or ACTIVE ACTIVITY for:
+    Design an engaging CLASSROOM GAME or ACTIVE LEARNING ACTIVITY for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
     Topic: ${sanitizeInput(unit.topicTitle)}
     Class Size: ${classroom.studentCount} students.
-    ${classroom.learningStyles?.length ? `The game must appeal to these learning styles: ${classroom.learningStyles.join(', ')}.` : ""}
+    ${classroom.learningStyles?.length ? `Learning Styles to target: ${classroom.learningStyles.join(', ')}.` : ""}
     ${classroom.studentInterests ? `Theme the game around: ${sanitizeInput(classroom.studentInterests, 300)} if possible.` : ""}
     ${classroom.accommodations ? `Ensure the game accommodates: ${sanitizeInput(classroom.accommodations, 300)}.` : ""}
-    
-    Format using Markdown.
+    ${file ? "Reference the attached document for curriculum alignment." : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these ## headings in EXACTLY this order.
+
+    ## Game Overview
+    [Name of game, type (competitive/collaborative/individual), and 1-sentence description]
+
+    ## Learning Objectives
+    [What students will practise or consolidate through this game]
+
+    ## Materials Required
+    [Everything the teacher needs to prepare]
+
+    ## Setup Instructions
+    [Step-by-step setup before the game begins]
+
+    ## How to Play
+    [Clear step-by-step rules a student could read and follow]
+
+    ## Differentiation Options
+    [How to make it easier for struggling learners and harder for advanced learners]
+
+    ## Debrief Questions
+    [3–5 discussion questions to run after the game to consolidate learning]
   `;
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.7 }
   });
@@ -359,14 +428,30 @@ export async function generateResourcesServer(classroom: Classroom, unit: WeekUn
     Curate a list of EXTRA RESOURCES and ENRICHMENT MATERIAL for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
     Topic: ${sanitizeInput(unit.topicTitle)}
-    
-    Format using Markdown.
+    ${file ? "Reference the attached document for context." : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these ## headings in EXACTLY this order.
+
+    ## Overview
+    [1-paragraph summary of why these resources support this topic]
+
+    ## Recommended Readings
+    [Textbook chapters, articles, or books with brief annotations]
+
+    ## Online Resources & Videos
+    [URLs or platform names with titles and brief descriptions — include YouTube, Khan Academy, etc. where relevant]
+
+    ## Extension Activities
+    [2–3 enrichment tasks for students who want to go deeper]
+
+    ## Teacher Notes
+    [Tips for how to use these resources in class or assign them as homework]
   `;
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.5 }
   });
@@ -389,7 +474,7 @@ export async function refineContentServer(currentContent: string, instruction: s
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.3 }
   });
@@ -417,7 +502,7 @@ export async function analyzeClassPerformanceServer(students: Student[]): Promis
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: 'gemini-2.0-flash',
     contents: prompt,
     config: { responseMimeType: "application/json", temperature: 0.2 }
   });
