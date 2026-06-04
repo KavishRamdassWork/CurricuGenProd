@@ -22,6 +22,20 @@ You are EDU-MASTER, a world-class educational content specialist.
 Your goal is to provide structured, curriculum-aligned content.
 `;
 
+// ─── Model Configuration ────────────────────────────────────────────────────
+// Update these constants when migrating to a new model generation.
+// gemini-2.0-flash was deprecated June 1 2026.
+// gemini-2.5-flash is the current migration target ($0.30/$2.50 per 1M tokens).
+// Next cutover: gemini-2.5-flash → October 16 2026. Check ai.google.dev/gemini-api/docs/deprecations.
+const GENERATION_MODEL = 'gemini-2.5-flash';
+const EMBEDDING_MODEL  = 'text-embedding-004';   // stable, no announced deprecation
+const IMAGE_MODEL      = 'imagen-3.0-generate-001'; // only used when image feature is enabled
+
+// Thinking budget: Gemini 2.5 Flash can "think" before responding (billed as output tokens).
+// Enable only for high-accuracy tasks (blueprint, formal assessment).
+// Cost: 2048 thinking tokens ≈ $0.005 extra per call — acceptable for these critical generations.
+const THINKING_BUDGET_HIGH = 2048;  // blueprint, formal assessment
+
 export function getAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured on the server.");
@@ -43,7 +57,7 @@ export async function getCurriculumContext(classroom: Classroom, topic: string):
   
   try {
     const response = await ai.models.embedContent({
-      model: 'text-embedding-004',
+      model: EMBEDDING_MODEL,
       contents: topic,
     });
     
@@ -102,11 +116,12 @@ export async function generateBlueprintServer(classroom: Classroom): Promise<Blu
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       temperature: 0.3,
+      thinkingConfig: { thinkingBudget: THINKING_BUDGET_HIGH },
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -191,7 +206,7 @@ export async function generateLessonPlanServer(classroom: Classroom, units: Week
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
   });
@@ -232,7 +247,7 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
   });
@@ -273,7 +288,7 @@ export async function generateAssignmentServer(classroom: Classroom, unit: WeekU
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.5 }
   });
@@ -319,9 +334,13 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.3 }
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      temperature: 0.3,
+      thinkingConfig: { thinkingBudget: THINKING_BUDGET_HIGH },
+    }
   });
   return response.text || "Failed to generate assessment.";
 }
@@ -352,7 +371,7 @@ export async function generateMemoServer(contentToGrade: string, classroom: Clas
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: prompt,
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.2 }
   });
@@ -388,7 +407,7 @@ export async function generatePresentationServer(classroom: Classroom, units: We
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: prompt,
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
   });
@@ -434,7 +453,7 @@ export async function generateGameServer(classroom: Classroom, unit: WeekUnit, f
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.7 }
   });
@@ -470,7 +489,7 @@ export async function generateResourcesServer(classroom: Classroom, unit: WeekUn
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.5 }
   });
@@ -500,7 +519,7 @@ export async function refineContentServer(currentContent: string, instruction: s
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.3 }
   });
@@ -528,7 +547,7 @@ export async function analyzeClassPerformanceServer(students: Student[]): Promis
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.0-flash',
+    model: GENERATION_MODEL,
     contents: prompt,
     config: { responseMimeType: "application/json", temperature: 0.2 }
   });
@@ -549,7 +568,7 @@ export async function generateEducationalImageServer(unit: WeekUnit): Promise<st
 
   try {
     const response = await ai.models.generateImages({
-      model: 'imagen-3.0-generate-001',
+      model: IMAGE_MODEL,
       prompt,
       config: {
         numberOfImages: 1,
