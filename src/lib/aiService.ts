@@ -480,13 +480,20 @@ export async function generateResourcesServer(classroom: Classroom, unit: WeekUn
 export async function refineContentServer(currentContent: string, instruction: string, contextType: string, file?: UploadedFile): Promise<string> {
   const ai = getAIClient();
   const basePrompt = `
-    You are an expert educational editor. 
-    User Instruction: "${sanitizeInput(instruction, 300)}"
+    You are an expert educational editor refining teacher-generated content.
 
-    Current Content:
+    TEACHER INSTRUCTION: "${sanitizeInput(instruction, 300)}"
+    ${file ? "A reference document has been attached. Use it to inform your edits." : ""}
+
+    CURRENT CONTENT:
     ${currentContent.slice(0, 30000)}
 
-    Task: Rewrite the content to satisfy the instruction. Return ONLY the updated Markdown.
+    TASK: Rewrite the content to satisfy the teacher's instruction.
+
+    CRITICAL RULES — YOU MUST FOLLOW THESE:
+    1. Preserve ALL existing ## level section headings EXACTLY as written. Do not rename, reorder, merge, add, or remove any ## heading.
+    2. You may freely rewrite content within sections — shorten, expand, simplify, reformat bullet points, change examples.
+    3. Return ONLY the updated Markdown. No explanation, no preamble, no commentary.
   `;
 
   const parts: any[] = [{ text: basePrompt }];
