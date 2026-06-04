@@ -33,7 +33,7 @@ Your goal is to provide structured, curriculum-aligned content.
 //                           Pricing: $1.50 input / $9.00 output per 1M tokens
 const GENERATION_MODEL = 'gemini-3.5-flash';
 const EMBEDDING_MODEL  = 'text-embedding-004';      // stable, no announced deprecation
-const IMAGE_MODEL      = 'imagen-3.0-generate-001'; // only used when image feature is enabled
+const IMAGE_MODEL      = 'imagen-4-fast-generate-001'; // upgraded from imagen-3, $0.02/image
 
 // Thinking budget: Gemini 3.5 Flash supports thinking tokens (billed as output tokens).
 // Enabled only for high-accuracy tasks (blueprint, formal assessment) where quality
@@ -561,14 +561,16 @@ export async function analyzeClassPerformanceServer(students: Student[]): Promis
   return JSON.parse(text) as ClassAnalysis;
 }
 
-export async function generateEducationalImageServer(unit: WeekUnit): Promise<string> {
+export async function generateEducationalImageServer(unit: WeekUnit, description?: string): Promise<string> {
   const ai = getAIClient();
-  const prompt = `
-    Create an educational illustration suitable for a slide or worksheet.
-    Topic: ${sanitizeInput(unit.topicTitle)}
-    Concept: ${sanitizeInput(unit.summary, 300)}
-    Style: Clear, textbook-style illustration, suitable for K-12 education. High contrast, clean lines.
-  `;
+  const prompt = description
+    ? `Create a clear, educational illustration for a K-12 classroom.
+Subject: ${sanitizeInput(description, 500)}
+Style: textbook-quality diagram or illustration, high contrast, clean lines, suitable for printing or projecting in class.`
+    : `Create an educational illustration suitable for a slide or worksheet.
+Topic: ${sanitizeInput(unit.topicTitle)}
+Concept: ${sanitizeInput(unit.summary, 300)}
+Style: Clear, textbook-style illustration, suitable for K-12 education. High contrast, clean lines.`;
 
   try {
     const response = await ai.models.generateImages({
@@ -577,17 +579,18 @@ export async function generateEducationalImageServer(unit: WeekUnit): Promise<st
       config: {
         numberOfImages: 1,
         outputMimeType: 'image/jpeg',
-        aspectRatio: '16:9'
-      }
+        aspectRatio: '16:9',
+      },
     });
 
     if (response.generatedImages && response.generatedImages.length > 0) {
       const img = response.generatedImages[0];
       if (img.image) return `data:${img.image.mimeType};base64,${img.image.imageBytes}`;
     }
-    return "";
-  } catch (error: any) {
-    console.error("Image generation failed", error);
+    return '';
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Image generation failed', msg);
     throw error;
   }
 }
