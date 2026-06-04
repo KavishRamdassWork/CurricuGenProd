@@ -487,7 +487,7 @@ const RenderMarkdown = ({
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
       components={{
-        h2: ({ children: h2Children, ...props }) => {
+        h2: ({ children: h2Children, node, ...props }) => {
           if (docType === 'teacher') {
             const color =
               TEACHER_H2_COLORS[Math.min(h2Index, TEACHER_H2_COLORS.length - 1)];
@@ -534,7 +534,7 @@ const RenderMarkdown = ({
             </h2>
           );
         },
-        h1: ({ children: h1Children, ...props }) => {
+        h1: ({ children: h1Children, node, ...props }) => {
           if (docType === 'student') {
             return (
               <h1
@@ -554,7 +554,7 @@ const RenderMarkdown = ({
           }
           return <h1 {...props}>{h1Children}</h1>;
         },
-        hr: ({ ...props }) => (
+        hr: ({ node, ...props }) => (
           <hr
             style={{
               border: 'none',
@@ -564,7 +564,7 @@ const RenderMarkdown = ({
             {...props}
           />
         ),
-        table: ({ ...props }) => (
+        table: ({ node, ...props }) => (
           <div className="overflow-x-auto my-6">
             <table
               className="min-w-full text-sm divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden"
@@ -572,14 +572,14 @@ const RenderMarkdown = ({
             />
           </div>
         ),
-        thead: ({ ...props }) => <thead className="bg-slate-50" {...props} />,
-        th: ({ ...props }) => (
+        thead: ({ node, ...props }) => <thead className="bg-slate-50" {...props} />,
+        th: ({ node, ...props }) => (
           <th
             className="px-4 py-3 text-left font-bold text-slate-700 uppercase tracking-wider"
             {...props}
           />
         ),
-        td: ({ ...props }) => (
+        td: ({ node, ...props }) => (
           <td className="px-4 py-3 border-t border-slate-200" {...props} />
         ),
       }}
