@@ -11,6 +11,7 @@ import { Sparkles, Users, LayoutDashboard, Loader2, Menu, Zap, Crown } from 'luc
 interface DbUser {
   plan: string;
   generationsLeft: number;
+  imagesLeft: number;
   name: string | null;
 }
 
@@ -292,6 +293,7 @@ const Dashboard = () => {
               onBack={handleBackToDashboard}
               onSaveClassContent={handleSaveClassLesson}
               onContentGenerated={refreshUser}
+              imagesLeft={dbUser?.imagesLeft ?? 0}
             />
           )}
         </div>

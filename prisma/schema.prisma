@@ -25,6 +25,8 @@ model User {
   plan             Plan        @default(FREE)
   generationsLeft  Int         @default(10)
   lastGenerationDate DateTime?
+  imagesLeft       Int         @default(1)
+  lastImageDate    DateTime?
   stripeCustomerId String?     @unique
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
@@ -44,6 +46,11 @@ model Classroom {
   studentCount      Int      @default(30)
   averagePercentile Int      @default(65)
   teachingNotes     String   @default("")
+  
+  // Advanced Student Customization
+  learningStyles    String[] @default([])
+  accommodations    String?
+  studentInterests  String?
 
   // Rich data stored as JSON (arrays of weeks/students)
   blueprint         Json?    // Blueprint type — JSON serialized

@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "User" ADD COLUMN "imagesLeft" INTEGER NOT NULL DEFAULT 1,
+ADD COLUMN "lastImageDate" TIMESTAMP(3);

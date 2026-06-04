@@ -3,13 +3,42 @@ import { Blueprint, WeekUnit, UploadedFile, Student, ClassAnalysis, Classroom } 
 import { Pinecone } from '@pinecone-database/pinecone';
 import { getPhaseForGrade } from './curriculumHelper';
 
-const pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY || '' });
+// Lazy initialization of Pinecone to avoid build-time errors if API key is missing
+let pc: Pinecone | null = null;
+const getPinecone = () => {
+  if (!pc) {
+    if (!process.env.PINECONE_API_KEY) {
+      console.warn("PINECONE_API_KEY is not set.");
+      return null;
+    }
+    pc = new Pinecone({ apiKey: process.env.PINECONE_API_KEY });
+  }
+  return pc;
+};
 const indexName = process.env.PINECONE_INDEX_NAME || '';
 
 const SYSTEM_INSTRUCTION = `
 You are EDU-MASTER, a world-class educational content specialist.
 Your goal is to provide structured, curriculum-aligned content.
 `;
+
+// ─── Model Configuration ────────────────────────────────────────────────────
+// Update GENERATION_MODEL here when Google announces a deprecation.
+// Check: ai.google.dev/gemini-api/docs/deprecations
+//
+// History:
+//   gemini-2.0-flash     → deprecated/retired June 1 2026
+//   gemini-2.5-flash     → deprecated October 16 2026
+//   gemini-3.5-flash     → active as of May 19 2026, no announced deprecation
+//                           Pricing: $1.50 input / $9.00 output per 1M tokens
+const GENERATION_MODEL = 'gemini-3.5-flash';
+const EMBEDDING_MODEL  = 'text-embedding-004';      // stable, no announced deprecation
+const IMAGE_MODEL      = 'imagen-4-fast-generate-001'; // upgraded from imagen-3, $0.02/image
+
+// Thinking budget: Gemini 3.5 Flash supports thinking tokens (billed as output tokens).
+// Enabled only for high-accuracy tasks (blueprint, formal assessment) where quality
+// matters more than the small extra cost (~$0.018 per call at $9/1M output).
+const THINKING_BUDGET_HIGH = 2048;
 
 export function getAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -32,14 +61,16 @@ export async function getCurriculumContext(classroom: Classroom, topic: string):
   
   try {
     const response = await ai.models.embedContent({
-      model: 'text-embedding-004',
+      model: EMBEDDING_MODEL,
       contents: topic,
     });
     
     const embedding = response.embeddings?.[0]?.values;
     if (!embedding) return "";
 
-    const index = pc.Index(indexName);
+    const pinecone = getPinecone();
+    if (!pinecone) return "";
+    const index = pinecone.Index(indexName);
     const queryResponse = await index.query({
       vector: embedding,
       topK: 3,
@@ -89,11 +120,12 @@ export async function generateBlueprintServer(classroom: Classroom): Promise<Blu
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: prompt,
     config: {
       systemInstruction: SYSTEM_INSTRUCTION,
       temperature: 0.3,
+      thinkingConfig: { thinkingBudget: THINKING_BUDGET_HIGH },
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -138,39 +170,47 @@ export async function generateLessonPlanServer(classroom: Classroom, units: Week
 
     CLASS SPECIFICS:
     - Size: ${classroom.studentCount} students
-    - Performance Level: ${classroom.averagePercentile}%
+    - Performance Level: ${classroom.averagePercentile}% (adjust difficulty accordingly)
     - Notes: ${sanitizeInput(classroom.teachingNotes, 500)}
     ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
     ${classroom.accommodations ? `- Accommodations Needed (CRITICAL): ${sanitizeInput(classroom.accommodations, 300)}` : ""}
     ${classroom.studentInterests ? `- Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
-    (Tailor the activities and timing to suit this specific group. If interests are provided, weave them into the lesson examples.)
+    (Tailor every activity, example, and timing to this specific group.)
 
-    ${file ? "CRITICAL: A reference document (textbook/booklet) has been provided. You MUST use the terminology, methods, and concepts found in this document to ensure alignment." : ""}
-    ${contextText ? `OFFICIAL CURRICULUM CONTEXT: The following texts outline the official standard for this topic. YOU MUST ADHERE TO THIS:\n${contextText}` : ""}
-    
-    REQUIRED OUTPUT SECTIONS (Markdown):
-    1. **Lesson Objective** & **Success Criteria**
-    2. **Key Concepts/Vocab**
-    3. **Materials Needed**
-    4. **Misconceptions**: Common student errors.
-    5. **Differentiation Strategies**:
-       - Support (for struggling learners)
-       - Extension (for advanced learners)
-    6. **Teaching Methodology**:
-       - **Introduction/Hook** (Time)
-       - **Direct Instruction** (Step-by-step)
-       - **Guided Practice**
-       - **Independent Practice**
-       - **Closure**
-    
-    Format: Clean, professional Markdown.
+    ${file ? "CRITICAL: A reference document has been provided. YOU MUST use its terminology, methods, and worked examples to ensure alignment." : ""}
+
+    ──────────────────────────────────────────
+    ${contextText ? `OFFICIAL CURRICULUM CONTEXT — YOU MUST ADHERE TO THIS:\n${contextText}\n──────────────────────────────────────────` : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these ## headings in EXACTLY this order. Do not add, rename, reorder, or remove any heading. Write freely within each section.
+
+    ## Objective & Success Criteria
+    [Lesson objective and 2–3 measurable success criteria]
+
+    ## Key Concepts & Vocabulary
+    [Key terms with brief definitions]
+
+    ## Materials Needed
+    [All required materials, resources, and handouts]
+
+    ## Common Misconceptions
+    [2–3 typical student errors or misconceptions for this topic with how to address them]
+
+    ## Differentiation Strategies
+    [Support strategies for struggling learners AND extension activities for advanced learners]
+
+    ## Lesson Flow
+    [Full lesson activities with time allocations — Hook/Introduction, Direct Instruction with step-by-step worked examples, Guided Practice, Independent Practice]
+
+    ## Closure & Exit Ticket
+    [How to close the lesson and the exit ticket activity]
   `;
 
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
   });
@@ -183,28 +223,35 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
     Create a ${sanitizeInput(type).toUpperCase()} STUDENT WORKSHEET for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
     Topic: ${sanitizeInput(unit.topicTitle)}
-    
-    Class Average: ${classroom.averagePercentile}% (Adjust difficulty).
-    ${classroom.accommodations ? `Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${classroom.studentInterests ? `Incorporate these interests if possible: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
-    ${userInstruction ? `IMPORTANT USER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
-    ${file ? "Reference the attached document for question styles and terminology." : ""}
 
-    Requirements:
-    - Title: ${sanitizeInput(unit.topicTitle)} - ${sanitizeInput(type)} Worksheet
-    - Instructions for students
-    - **Section A**: Basic Understanding (Recall)
-    - **Section B**: Application (Problem Solving)
-    - **Section C**: Challenge (Critical Thinking)
-    
-    Format: Print-ready Markdown. DO NOT INCLUDE ANSWERS.
+    Class Average: ${classroom.averagePercentile}% — adjust difficulty accordingly.
+    ${classroom.accommodations ? `Accommodations (apply throughout): ${sanitizeInput(classroom.accommodations, 300)}` : ""}
+    ${classroom.studentInterests ? `Incorporate these interests in examples where possible: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
+    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
+    ${file ? "Reference the attached document for question styles, terminology, and worked examples." : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order. Do not include answers.
+
+    # ${sanitizeInput(unit.topicTitle)} — ${sanitizeInput(type)} Worksheet
+    **Subject:** ${sanitizeInput(classroom.subject)} &nbsp;&nbsp; **Grade:** ${sanitizeInput(classroom.grade)} &nbsp;&nbsp; **Total:** [X] marks &nbsp;&nbsp; **Time:** [X] minutes
+
+    ---
+
+    ## Section A — Basic Understanding ([X] marks)
+    [Recall and knowledge questions. Use multiple choice or short-answer format. Each question worth 1–2 marks.]
+
+    ## Section B — Application ([X] marks)
+    [Problem-solving questions requiring working to be shown. Each question worth 3–5 marks.]
+
+    ## Section C — Challenge ([X] marks)
+    [Critical thinking and extension questions. Each question worth 5+ marks.]
   `;
 
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
   });
@@ -214,29 +261,38 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
 export async function generateAssignmentServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile, userInstruction?: string): Promise<string> {
   const ai = getAIClient();
   const basePrompt = `
-    Create a RELEVANT HOMEWORK ASSIGNMENT for:
-    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
+    Create a HOMEWORK ASSIGNMENT for:
+    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
     Topic: ${sanitizeInput(unit.topicTitle)}
-    
+    Learning Outcome: ${sanitizeInput(unit.learningOutcome)}
+
     Class Notes: ${sanitizeInput(classroom.teachingNotes, 300)}
     ${classroom.accommodations ? `Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
     ${classroom.learningStyles?.length ? `Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
     ${classroom.studentInterests ? `Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
-    ${userInstruction ? `IMPORTANT USER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
-    
-    Requirements:
-    - Step-by-step instructions.
-    - Tasks that specifically reinforce: ${sanitizeInput(unit.learningOutcome)}.
-    - Due Date Placeholder.
-    - Assessment Rubric.
-    
-    Format: Print-ready Markdown.
+    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order.
+
+    # ${sanitizeInput(unit.topicTitle)} — Assignment
+    **Subject:** ${sanitizeInput(classroom.subject)} &nbsp;&nbsp; **Grade:** ${sanitizeInput(classroom.grade)} &nbsp;&nbsp; **Due Date:** _______________
+
+    ---
+
+    ## Section A — Instructions
+    [Clear step-by-step instructions for the assignment. What to do, how to submit, and what resources are permitted.]
+
+    ## Section B — Tasks
+    [The actual tasks or questions. Number each task clearly. Include mark allocations per task.]
+
+    ## Section C — Assessment Rubric
+    [A table with: Criteria | Excellent | Satisfactory | Needs Improvement | Marks. Cover the key learning outcome.]
   `;
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.5 }
   });
@@ -251,31 +307,44 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
   }
 
   const basePrompt = `
-    Create a FORMAL TEST / EXAM for:
+    Create a FORMAL TEST / ASSESSMENT for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
-    
+
     SCOPE:
     ${scopeText}
-    
-    Class Average: ${classroom.averagePercentile}% (Ensure appropriate difficulty curve).
-    ${classroom.accommodations ? `MUST INCLUDE Accommodations for: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${userInstruction ? `IMPORTANT USER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
 
-    Requirements:
-    - Total Marks (e.g., 50)
-    - Time Allowance
-    - Variety of Question Types (MCQ, Short Answer, Essay).
-    - Professional layout.
-    
-    Format: Print-ready Markdown. DO NOT INCLUDE ANSWERS here.
+    Class Average: ${classroom.averagePercentile}% — ensure an appropriate difficulty curve across sections.
+    ${classroom.accommodations ? `MUST INCLUDE accommodations for: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
+    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
+    ${file ? "Reference the attached document for question style and terminology." : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order. Do not include answers.
+
+    # ${sanitizeInput(classroom.subject)} — Formal Assessment
+    **Grade:** ${sanitizeInput(classroom.grade)} &nbsp;&nbsp; **Total:** [X] marks &nbsp;&nbsp; **Time:** [X] minutes
+
+    ---
+
+    ## Section A — Multiple Choice ([X] marks)
+    [MCQ questions worth 2 marks each. Include 4 options labelled A–D. Each question on its own line. End each question with an empty answer line: "Answer: ___" — leave it blank, do NOT fill in the answer.]
+
+    ## Section B — Short Answer ([X] marks)
+    [Questions requiring brief written responses or calculations with working shown. Show mark allocation per question in [brackets].]
+
+    ## Section C — Extended Response ([X] marks)
+    [Essay-style or extended problem questions. Show mark allocation and include any scaffolding prompts.]
   `;
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.3 }
+    config: {
+      systemInstruction: SYSTEM_INSTRUCTION,
+      temperature: 0.3,
+      thinkingConfig: { thinkingBudget: THINKING_BUDGET_HIGH },
+    }
   });
   return response.text || "Failed to generate assessment.";
 }
@@ -283,22 +352,30 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
 export async function generateMemoServer(contentToGrade: string, classroom: Classroom): Promise<string> {
   const ai = getAIClient();
   const prompt = `
-    Create a COMPREHENSIVE MEMORANDUM (ANSWER KEY) for the following assessment/worksheet.
+    Create a COMPREHENSIVE MEMORANDUM (ANSWER KEY) for the following assessment or worksheet.
     Subject: ${sanitizeInput(classroom.subject)}
     Grade: ${sanitizeInput(classroom.grade)}
 
-    CONTENT TO GRADE:
+    CONTENT TO MARK:
     ${contentToGrade.slice(0, 8000)}
 
-    INSTRUCTIONS:
-    - Provide clear, accurate answers.
-    - Include mark allocations.
-    - Show working out for math/science.
-    - Format as a clear table or list.
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order.
+
+    # Memorandum — Answer Key
+    **Subject:** ${sanitizeInput(classroom.subject)} &nbsp;&nbsp; **Grade:** ${sanitizeInput(classroom.grade)}
+    **CONFIDENTIAL — For Teacher Use Only**
+
+    ---
+
+    ## Marking Guidelines
+    [General marking principles: accuracy requirements, acceptable alternative answers, method marks policy]
+
+    ## Answers
+    [For EACH section and question in the CONTENT TO MARK above, provide the model answer in the same section order as the source document. Use the same section headings as the source (e.g. if source has "Section A — Multiple Choice", mirror that heading here). Show mark allocations. For calculations, show full working. For MCQ, state the correct option letter and a brief reason.]
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: prompt,
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.2 }
   });
@@ -308,21 +385,33 @@ export async function generateMemoServer(contentToGrade: string, classroom: Clas
 export async function generatePresentationServer(classroom: Classroom, units: WeekUnit[]): Promise<string> {
   const ai = getAIClient();
   const prompt = `
-    Create a Presentation Outline for:
+    Create a SLIDE DECK OUTLINE for:
     Topic: ${sanitizeInput(units[0].topicTitle)}
+    Learning Outcome: ${sanitizeInput(units[0].learningOutcome)}
+    Context: ${sanitizeInput(units[0].summary, 300)}
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
-    Student Level: ${classroom.averagePercentile}% avg.
+    Student Level: ${classroom.averagePercentile}% average.
+    ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
 
-    Format as a slide deck outline.
-    For each slide include:
-    - Title
-    - Bullet points for students
-    - Teacher Speaker Notes
-    - Suggested Visuals
+    OUTPUT FORMAT — CRITICAL: Each slide must follow this exact structure. Use sequential ## headings (## Slide 1, ## Slide 2, etc.) and substitute REAL, topic-specific titles — never use placeholder text in brackets.
+
+    Example of one correctly formatted slide:
+
+    ## Slide 1: Introduction to Quadratic Equations
+    ### Content
+    - A quadratic equation has the form ax² + bx + c = 0
+    - We use them to model real-world problems (e.g. projectile motion)
+    - Today we will solve them using factorisation and the quadratic formula
+    ### Speaker Notes
+    Open with the ball-throw question: "If I throw a ball upward at 20 m/s, when does it land?" Give students 30 seconds to guess. Then explain that answering this requires a quadratic equation. (5 minutes)
+    ### Suggested Visual
+    Split screen: left side shows a parabola graph, right side shows the standard form equation ax² + bx + c = 0 with each term labelled.
+
+    Now create a complete, topic-specific slide deck for the topic above. Minimum 6 slides. Last slide must be a summary with an exit ticket question. Every slide must use the ## Slide N: [Real Title] / ### Content / ### Speaker Notes / ### Suggested Visual structure.
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: prompt,
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
   });
@@ -332,21 +421,43 @@ export async function generatePresentationServer(classroom: Classroom, units: We
 export async function generateGameServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile): Promise<string> {
   const ai = getAIClient();
   const basePrompt = `
-    Design an engaging CLASSROOM GAME or ACTIVE ACTIVITY for:
+    Design an engaging CLASSROOM GAME or ACTIVE LEARNING ACTIVITY for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
     Topic: ${sanitizeInput(unit.topicTitle)}
     Class Size: ${classroom.studentCount} students.
-    ${classroom.learningStyles?.length ? `The game must appeal to these learning styles: ${classroom.learningStyles.join(', ')}.` : ""}
+    ${classroom.learningStyles?.length ? `Learning Styles to target: ${classroom.learningStyles.join(', ')}.` : ""}
     ${classroom.studentInterests ? `Theme the game around: ${sanitizeInput(classroom.studentInterests, 300)} if possible.` : ""}
     ${classroom.accommodations ? `Ensure the game accommodates: ${sanitizeInput(classroom.accommodations, 300)}.` : ""}
-    
-    Format using Markdown.
+    ${file ? "Reference the attached document for curriculum alignment." : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these ## headings in EXACTLY this order.
+
+    ## Game Overview
+    [Name of game, type (competitive/collaborative/individual), and 1-sentence description]
+
+    ## Learning Objectives
+    [What students will practise or consolidate through this game]
+
+    ## Materials Required
+    [Everything the teacher needs to prepare]
+
+    ## Setup Instructions
+    [Step-by-step setup before the game begins]
+
+    ## How to Play
+    [Clear step-by-step rules a student could read and follow]
+
+    ## Differentiation Options
+    [How to make it easier for struggling learners and harder for advanced learners]
+
+    ## Debrief Questions
+    [3–5 discussion questions to run after the game to consolidate learning]
   `;
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.7 }
   });
@@ -359,14 +470,30 @@ export async function generateResourcesServer(classroom: Classroom, unit: WeekUn
     Curate a list of EXTRA RESOURCES and ENRICHMENT MATERIAL for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
     Topic: ${sanitizeInput(unit.topicTitle)}
-    
-    Format using Markdown.
+    ${file ? "Reference the attached document for context." : ""}
+
+    OUTPUT FORMAT — CRITICAL: Use EXACTLY these ## headings in EXACTLY this order.
+
+    ## Overview
+    [1-paragraph summary of why these resources support this topic]
+
+    ## Recommended Readings
+    [Textbook chapters, articles, or books with brief annotations]
+
+    ## Online Resources & Videos
+    [URLs or platform names with titles and brief descriptions — include YouTube, Khan Academy, etc. where relevant]
+
+    ## Extension Activities
+    [2–3 enrichment tasks for students who want to go deeper]
+
+    ## Teacher Notes
+    [Tips for how to use these resources in class or assign them as homework]
   `;
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.5 }
   });
@@ -376,20 +503,27 @@ export async function generateResourcesServer(classroom: Classroom, unit: WeekUn
 export async function refineContentServer(currentContent: string, instruction: string, contextType: string, file?: UploadedFile): Promise<string> {
   const ai = getAIClient();
   const basePrompt = `
-    You are an expert educational editor. 
-    User Instruction: "${sanitizeInput(instruction, 300)}"
+    You are an expert educational editor refining teacher-generated content.
 
-    Current Content:
+    TEACHER INSTRUCTION: "${sanitizeInput(instruction, 300)}"
+    ${file ? "A reference document has been attached. Use it to inform your edits." : ""}
+
+    CURRENT CONTENT:
     ${currentContent.slice(0, 30000)}
 
-    Task: Rewrite the content to satisfy the instruction. Return ONLY the updated Markdown.
+    TASK: Rewrite the content to satisfy the teacher's instruction.
+
+    CRITICAL RULES — YOU MUST FOLLOW THESE:
+    1. Preserve ALL existing ## level section headings EXACTLY as written. Do not rename, reorder, merge, add, or remove any ## heading.
+    2. You may freely rewrite content within sections — shorten, expand, simplify, reformat bullet points, change examples.
+    3. Return ONLY the updated Markdown. No explanation, no preamble, no commentary.
   `;
 
   const parts: any[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: { parts },
     config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.3 }
   });
@@ -417,7 +551,7 @@ export async function analyzeClassPerformanceServer(students: Student[]): Promis
   `;
 
   const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
+    model: GENERATION_MODEL,
     contents: prompt,
     config: { responseMimeType: "application/json", temperature: 0.2 }
   });
@@ -427,33 +561,36 @@ export async function analyzeClassPerformanceServer(students: Student[]): Promis
   return JSON.parse(text) as ClassAnalysis;
 }
 
-export async function generateEducationalImageServer(unit: WeekUnit): Promise<string> {
+export async function generateEducationalImageServer(unit: WeekUnit, description?: string): Promise<string> {
   const ai = getAIClient();
-  const prompt = `
-    Create an educational illustration suitable for a slide or worksheet.
-    Topic: ${sanitizeInput(unit.topicTitle)}
-    Concept: ${sanitizeInput(unit.summary, 300)}
-    Style: Clear, textbook-style illustration, suitable for K-12 education. High contrast, clean lines.
-  `;
+  const prompt = description
+    ? `Create a clear, educational illustration for a K-12 classroom.
+Subject: ${sanitizeInput(description, 500)}
+Style: textbook-quality diagram or illustration, high contrast, clean lines, suitable for printing or projecting in class.`
+    : `Create an educational illustration suitable for a slide or worksheet.
+Topic: ${sanitizeInput(unit.topicTitle)}
+Concept: ${sanitizeInput(unit.summary, 300)}
+Style: Clear, textbook-style illustration, suitable for K-12 education. High contrast, clean lines.`;
 
   try {
     const response = await ai.models.generateImages({
-      model: 'imagen-3.0-generate-001',
+      model: IMAGE_MODEL,
       prompt,
       config: {
         numberOfImages: 1,
         outputMimeType: 'image/jpeg',
-        aspectRatio: '16:9'
-      }
+        aspectRatio: '16:9',
+      },
     });
 
     if (response.generatedImages && response.generatedImages.length > 0) {
       const img = response.generatedImages[0];
       if (img.image) return `data:${img.image.mimeType};base64,${img.image.imageBytes}`;
     }
-    return "";
-  } catch (error: any) {
-    console.error("Image generation failed", error);
+    return '';
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : String(error);
+    console.error('Image generation failed', msg);
     throw error;
   }
 }

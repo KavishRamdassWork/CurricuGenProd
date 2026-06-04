@@ -76,7 +76,7 @@ export const analyzeClassPerformance = async (students: Student[]): Promise<Clas
   return data.analysis;
 };
 
-export const generateEducationalImage = async (unit: WeekUnit): Promise<string> => {
-  const data = await apiPost<{ imageUrl: string }>('image', { unit });
+export const generateEducationalImage = async (unit: WeekUnit, description?: string): Promise<string> => {
+  const data = await apiPost<{ imageUrl: string }>('image', { unit, description });
   return data.imageUrl;
 };
