@@ -273,7 +273,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   return (
     <div className="flex h-full bg-slate-100 overflow-hidden relative">
       {/* LEFT TOOLBAR */}
-      <aside className={`bg-white border-r border-slate-200 flex flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
+      <aside className={`no-print bg-white border-r border-slate-200 flex flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
         <div className="h-16 border-b border-slate-100 flex items-center px-4 gap-3">
           <button onClick={onBack} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><ArrowLeft className="w-5 h-5" /></button>
           {!isSidebarCollapsed && <span className="font-bold text-slate-800 truncate">Workspace</span>}
@@ -332,7 +332,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
 
       {/* MAIN DOCUMENT AREA */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
-        <div className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-none">
+        <div className="no-print h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-none">
           <div className="min-w-0 pr-4 flex-1">
             <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2 truncate">
               <span className="truncate">{isRevisionMode ? "Revision Plan" : units[0].topicTitle}</span>
@@ -481,7 +481,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
 
       {/* AI CHAT SIDEBAR */}
       {isChatOpen && (
-        <aside className="w-96 bg-white border-l border-slate-200 shadow-2xl z-30 flex flex-col">
+        <aside className="no-print w-96 bg-white border-l border-slate-200 shadow-2xl z-30 flex flex-col">
           <div className="h-16 border-b border-slate-100 flex items-center px-6 bg-slate-50/50 justify-between">
             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Sparkles className="w-4 h-4 text-blue-600" /> AI Assistant</h3>
             <button onClick={() => setIsChatOpen(false)}><X className="w-4 h-4 text-slate-400" /></button>
