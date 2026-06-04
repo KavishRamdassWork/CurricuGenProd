@@ -8,7 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { WeekUnit, UploadedFile, ChatMessage, EducationalResource, TemplateConfig, Classroom } from '@/lib/types';
 import { generateLessonPlan, generatePresentation, generateWorksheet, generateAssignment, generateAssessment, generateMemo, generateGame, generateResources, refineContent, generateEducationalImage } from '@/lib/gemini';
-import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, Trash2, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, LayoutTemplate, PenTool, GripVertical, Download } from 'lucide-react';
+import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, Trash2, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, LayoutTemplate, PenTool, GripVertical, Download, ChevronDown } from 'lucide-react';
 
 interface LessonWorkspaceProps {
   units: WeekUnit[];
@@ -53,6 +53,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   const [attachedFile, setAttachedFile] = useState<UploadedFile | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const logoInputRef = useRef<HTMLInputElement>(null);
+  const [isDownloadOpen, setIsDownloadOpen] = useState(false);
+  const [isDownloadLoading, setIsDownloadLoading] = useState(false);
 
   useEffect(() => {
     const saved = activeClass.savedLessons?.[unitKey];
@@ -194,6 +196,70 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
     } finally { setIsRefining(false); }
   };
 
+  const getCurrentExport = (): { content: string; docType: 'teacher' | 'student'; title: string } => {
+    const topicTitle = isRevisionMode
+      ? `Revision — Weeks ${units.map(u => u.weekNumber).join(', ')}`
+      : units[0].topicTitle;
+
+    if (activeSection === 'plan') return { content: lessonPlan ?? '', docType: 'teacher', title: `Lesson Plan — ${topicTitle}` };
+    if (activeSection === 'slides') return { content: slides ?? '', docType: 'teacher', title: `Slide Outline — ${topicTitle}` };
+    if (activeSection === 'game') return { content: game ?? '', docType: 'teacher', title: `Activity — ${topicTitle}` };
+    if (activeSection === 'resources') return { content: resources ?? '', docType: 'teacher', title: `Resources — ${topicTitle}` };
+    if (activeSection === 'educational' && selectedResourceId) {
+      const res = [...worksheets, ...assignments, ...tests].find(r => r.id === selectedResourceId);
+      if (res) {
+        const content = resourceViewMode === 'content' ? res.content : (res.memo ?? '');
+        return { content, docType: 'student', title: res.title };
+      }
+    }
+    return { content: '', docType: 'teacher', title: topicTitle };
+  };
+
+  const handlePdfDownload = () => {
+    setIsDownloadOpen(false);
+    window.print();
+  };
+
+  const handleDocxDownload = async () => {
+    setIsDownloadOpen(false);
+    const { content, docType, title } = getCurrentExport();
+    if (!content) return;
+    setIsDownloadLoading(true);
+    try {
+      const res = await fetch('/api/export/docx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content,
+          title,
+          docType,
+          metadata: {
+            subject: activeClass.subject,
+            grade: activeClass.grade,
+            className: activeClass.name,
+            schoolName: templateConfig.schoolName || undefined,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'DOCX generation failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${title}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : 'Failed to generate Word document.';
+      alert(msg + ' Try downloading as PDF instead.');
+    } finally {
+      setIsDownloadLoading(false);
+    }
+  };
+
   const DocumentHeader = () => {
     if (!templateConfig.logo && !templateConfig.schoolName) return null;
     return (
@@ -286,7 +352,65 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
             )}
             <button onClick={() => setIsTemplateModalOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Settings className="w-5 h-5" /></button>
             <button onClick={() => setIsChatOpen(!isChatOpen)} className={`p-2 rounded-lg transition-colors flex-shrink-0 ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="w-5 h-5" /></button>
-            <button onClick={() => window.print()} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Printer className="w-5 h-5" /></button>
+            {/* Download Dropdown */}
+            <div className="relative flex-shrink-0">
+              <button
+                onClick={() => setIsDownloadOpen(prev => !prev)}
+                disabled={isDownloadLoading}
+                className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+              >
+                {isDownloadLoading
+                  ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                  : <Download className="w-4 h-4" />
+                }
+                <span className="hidden sm:inline">Download</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${isDownloadOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isDownloadOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setIsDownloadOpen(false)} />
+                  <div className="absolute right-0 top-full mt-1 w-52 bg-white border border-slate-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                    <button
+                      onClick={handlePdfDownload}
+                      disabled={!getCurrentExport().content}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={!getCurrentExport().content ? 'Generate content first' : undefined}
+                    >
+                      <FileText className="w-4 h-4 text-red-500" />
+                      <div className="text-left">
+                        <div className="font-bold">Download as PDF</div>
+                        <div className="text-xs text-slate-400">Print-ready document</div>
+                      </div>
+                    </button>
+                    <div className="border-t border-slate-100" />
+                    <button
+                      onClick={handleDocxDownload}
+                      disabled={!getCurrentExport().content}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      title={!getCurrentExport().content ? 'Generate content first' : undefined}
+                    >
+                      <FileText className="w-4 h-4 text-blue-500" />
+                      <div className="text-left">
+                        <div className="font-bold">Download as Word</div>
+                        <div className="text-xs text-slate-400">Editable .docx file</div>
+                      </div>
+                    </button>
+                    <div className="border-t border-slate-100" />
+                    <button
+                      onClick={handlePdfDownload}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
+                    >
+                      <Printer className="w-4 h-4 text-slate-400" />
+                      <div className="text-left">
+                        <div className="font-bold">Print</div>
+                        <div className="text-xs text-slate-400">Open print dialog</div>
+                      </div>
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
