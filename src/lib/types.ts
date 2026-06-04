@@ -34,6 +34,8 @@ export interface LessonContent {
   worksheets: EducationalResource[];
   assignments: EducationalResource[];
   tests: EducationalResource[];
+  imageUrl?: string;
+  slideImages?: { slideNumber: number; imageUrl: string }[];
 }
 
 export enum AppState {
