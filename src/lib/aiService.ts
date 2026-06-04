@@ -331,41 +331,27 @@ export async function generatePresentationServer(classroom: Classroom, units: We
   const prompt = `
     Create a SLIDE DECK OUTLINE for:
     Topic: ${sanitizeInput(units[0].topicTitle)}
+    Learning Outcome: ${sanitizeInput(units[0].learningOutcome)}
+    Context: ${sanitizeInput(units[0].summary, 300)}
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
     Student Level: ${classroom.averagePercentile}% average.
     ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
 
-    OUTPUT FORMAT — CRITICAL: Repeat this EXACT pattern for every slide. Do not vary the structure.
+    OUTPUT FORMAT — CRITICAL: Each slide must follow this exact structure. Use sequential ## headings (## Slide 1, ## Slide 2, etc.) and substitute REAL, topic-specific titles — never use placeholder text in brackets.
 
-    ## Slide 1: [Title Slide]
+    Example of one correctly formatted slide:
+
+    ## Slide 1: Introduction to Quadratic Equations
     ### Content
-    - [Title of topic]
-    - [Subtitle or hook question]
+    - A quadratic equation has the form ax² + bx + c = 0
+    - We use them to model real-world problems (e.g. projectile motion)
+    - Today we will solve them using factorisation and the quadratic formula
     ### Speaker Notes
-    [What the teacher says to open, timing for this slide]
+    Open with the ball-throw question: "If I throw a ball upward at 20 m/s, when does it land?" Give students 30 seconds to guess. Then explain that answering this requires a quadratic equation. (5 minutes)
     ### Suggested Visual
-    [Description of image, diagram, or visual to display]
+    Split screen: left side shows a parabola graph, right side shows the standard form equation ax² + bx + c = 0 with each term labelled.
 
-    ## Slide 2: [Learning Objectives]
-    ### Content
-    - [Objective 1]
-    - [Objective 2]
-    - [Objective 3]
-    ### Speaker Notes
-    [Talking points]
-    ### Suggested Visual
-    [Visual description]
-
-    [Continue for as many slides as needed to cover the topic thoroughly — minimum 6 slides]
-
-    ## Slide [N]: Summary & Exit Ticket
-    ### Content
-    - [3 key takeaways]
-    - Exit ticket question: [question]
-    ### Speaker Notes
-    [Closing remarks and how to run the exit ticket]
-    ### Suggested Visual
-    [Summary graphic or mind map description]
+    Now create a complete, topic-specific slide deck for the topic above. Minimum 6 slides. Last slide must be a summary with an exit ticket question. Every slide must use the ## Slide N: [Real Title] / ### Content / ### Speaker Notes / ### Suggested Visual structure.
   `;
 
   const response = await ai.models.generateContent({
