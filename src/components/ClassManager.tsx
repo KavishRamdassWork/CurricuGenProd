@@ -16,16 +16,20 @@ interface ClassManagerProps {
   onDeleteClass?: (classroomId: string) => Promise<void>;
   editingClass?: Classroom | null;
   onCloseEdit?: () => void;
+  onOpenEditClass?: (classroom: Classroom) => void;
 }
 
 const LEARNING_STYLES = ['Visual', 'Auditory', 'Reading/Writing', 'Kinesthetic', 'Logical', 'Social', 'Solitary'];
 
-const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpenClass, onCreateClass, onUpdateClass, onDeleteClass, editingClass, onCloseEdit }) => {
+const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpenClass, onCreateClass, onUpdateClass, onDeleteClass, editingClass, onCloseEdit, onOpenEditClass }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeAnalysisClassId, setActiveAnalysisClassId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [wizardStep, setWizardStep] = useState(1);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const deleteTarget = classes.find(c => c.id === deleteTargetId);
   const [stepChangeTime, setStepChangeTime] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -158,6 +162,17 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
     }
   };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget || !onDeleteClass) return;
+    setIsDeleting(true);
+    try {
+      await onDeleteClass(deleteTarget.id);
+      setDeleteTargetId(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="flex-1 h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-blue-50/40 p-6 md:p-10 relative">
       <div className="max-w-7xl mx-auto">
@@ -214,12 +229,29 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
                     <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 uppercase tracking-widest">
                        {cls.grade}
                     </span>
-                    <button 
-                       onClick={(e) => { e.stopPropagation(); setActiveAnalysisClassId(cls.id); }} 
-                       className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 hover:shadow-md hover:shadow-blue-500/30 transition-all duration-300"
-                    >
-                       <BarChart2 className="w-5 h-5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                       <button
+                          title="Edit Class"
+                          onClick={(e) => { e.stopPropagation(); onOpenEditClass?.(cls); }}
+                          className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 transition-all duration-300"
+                       >
+                          <Pencil className="w-4 h-4" />
+                       </button>
+                       <button
+                          title="Class Analytics"
+                          onClick={(e) => { e.stopPropagation(); setActiveAnalysisClassId(cls.id); }}
+                          className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 transition-all duration-300"
+                       >
+                          <BarChart2 className="w-4 h-4" />
+                       </button>
+                       <button
+                          title="Delete Class"
+                          onClick={(e) => { e.stopPropagation(); setDeleteTargetId(cls.id); }}
+                          className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-600 transition-all duration-300"
+                       >
+                          <Trash2 className="w-4 h-4" />
+                       </button>
+                    </div>
                   </div>
                   
                   <h3 className="text-2xl font-extrabold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors tracking-tight">{cls.name}</h3>
@@ -490,8 +522,50 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
           </div>
         </div>
       )}
+
+      {/* DELETE CONFIRMATION MODAL */}
+      {deleteTarget && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-[100] flex items-center justify-center p-4">
+          <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl p-8 animate-in fade-in zoom-in-95 duration-300 border border-white">
+            <h2 className="text-xl font-extrabold text-slate-900 mb-1">Delete Class</h2>
+            <p className="text-slate-500 text-sm mb-6">This action cannot be undone.</p>
+
+            <div className="bg-red-50 border border-red-100 rounded-2xl p-4 mb-5">
+              <div className="font-bold text-red-900">{deleteTarget.name}</div>
+              <div className="text-xs text-red-600 font-medium">
+                {deleteTarget.grade} • {deleteTarget.subject} • {deleteTarget.studentCount} students
+              </div>
+            </div>
+
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">
+              The following will be permanently deleted
+            </p>
+            <ul className="text-sm text-slate-600 space-y-2 mb-8">
+              <li>• Curriculum blueprint {deleteTarget.blueprint ? `(${deleteTarget.blueprint.units.length} weeks)` : '(not yet generated)'}</li>
+              <li>• {Object.keys(deleteTarget.savedLessons ?? {}).length} saved lesson{Object.keys(deleteTarget.savedLessons ?? {}).length === 1 ? '' : 's'}</li>
+              <li>• {countResources(deleteTarget, 'worksheets')} worksheets, {countResources(deleteTarget, 'assignments')} assignments, {countResources(deleteTarget, 'tests')} tests</li>
+              <li>• All student marks &amp; analysis for {deleteTarget.studentCount} students</li>
+            </ul>
+
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setDeleteTargetId(null)} disabled={isDeleting}
+                className="px-6 py-3 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors disabled:opacity-50">
+                Cancel
+              </button>
+              <button onClick={handleConfirmDelete} disabled={isDeleting}
+                className="px-6 py-3 rounded-full bg-red-600 text-white font-extrabold shadow-lg shadow-red-600/20 hover:bg-red-700 transition-all flex items-center gap-2 disabled:opacity-50">
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />} Delete Forever
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
+function countResources(cls: Classroom, key: 'worksheets' | 'assignments' | 'tests'): number {
+  return Object.values(cls.savedLessons ?? {}).reduce((sum, lesson) => sum + (lesson[key]?.length ?? 0), 0);
+}
 
 export default ClassManager;
