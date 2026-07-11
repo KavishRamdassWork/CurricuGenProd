@@ -36,6 +36,7 @@ export interface LessonContent {
   tests: EducationalResource[];
   imageUrl?: string;
   slideImages?: { slideNumber: number; imageUrl: string }[];
+  settingsHash?: string;
 }
 
 export enum AppState {
