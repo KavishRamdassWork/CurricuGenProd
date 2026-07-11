@@ -5,9 +5,9 @@ import { useUser, UserButton } from '@clerk/nextjs';
 import ClassManager from '@/components/ClassManager';
 import CurriculumDashboard from '@/components/CurriculumDashboard';
 import LessonWorkspace from '@/components/LessonWorkspace';
-import { Blueprint, WeekUnit, AppState, Classroom } from '@/lib/types';
+import { Blueprint, WeekUnit, AppState, Classroom, LessonContent } from '@/lib/types';
 import { computeSettingsHash } from '@/lib/classHash';
-import { Sparkles, Users, LayoutDashboard, Loader2, Menu, Zap, Crown } from 'lucide-react';
+import { Sparkles, Users, LayoutDashboard, Loader2, Menu, Zap, Crown, LucideIcon } from 'lucide-react';
 
 interface DbUser {
   plan: string;
@@ -43,7 +43,7 @@ const Dashboard = () => {
         if (classRes.ok) {
           const { classrooms } = await classRes.json();
           // Prisma returns JSON fields as plain objects — cast them back
-          setClasses(classrooms.map((c: any) => ({
+          setClasses(classrooms.map((c: Classroom) => ({
             ...c,
             blueprint: c.blueprint ?? undefined,
             students: c.students ?? [],
@@ -206,7 +206,7 @@ const Dashboard = () => {
     await persistClassroom(activeClassId, { blueprint: updatedBlueprint });
   };
 
-  const handleSaveClassLesson = async (classId: string, unitKey: string, content: any) => {
+  const handleSaveClassLesson = async (classId: string, unitKey: string, content: LessonContent) => {
     setClasses(prev => prev.map(c => {
       if (c.id !== classId) return c;
       const savedLessons = { ...(c.savedLessons || {}), [unitKey]: content };
@@ -354,7 +354,15 @@ const Dashboard = () => {
   );
 };
 
-const NavItem = ({ icon: Icon, label, isActive, onClick, collapsed }: any) => (
+interface NavItemProps {
+  icon: LucideIcon;
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+  collapsed: boolean;
+}
+
+const NavItem = ({ icon: Icon, label, isActive, onClick, collapsed }: NavItemProps) => (
   <button onClick={onClick} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'} ${collapsed ? 'justify-center' : ''}`} title={collapsed ? label : undefined}>
     <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
     {!collapsed && <span className="font-medium text-sm">{label}</span>}

@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Part } from '@google/genai';
 import { Pinecone } from '@pinecone-database/pinecone';
 import crypto from 'crypto';
 import dotenv from 'dotenv';
@@ -38,18 +38,18 @@ async function main() {
   const dataBuffer = fs.readFileSync(CONFIG.pdfPath);
   
   console.log("Using Gemini 2.5 Flash to extract text from the PDF...");
-  const pdfPart = {
+  const pdfPart: Part = {
     inlineData: {
       data: dataBuffer.toString("base64"),
       mimeType: "application/pdf"
     }
   };
-  
+
   const extraction = await ai.models.generateContent({
     model: 'gemini-2.5-flash',
     contents: [
       { text: "Extract all textual content from this document exactly as it is. Preserve headings, bullet points, and table structures. Do not summarize or skip anything." },
-      pdfPart as any
+      pdfPart
     ]
   });
   
@@ -95,10 +95,10 @@ async function main() {
     }));
 
     // Flatten chunks
-    const validRecords = records.flat().filter(r => r !== null) as any[];
+    const validRecords = records.flat().filter((r): r is NonNullable<typeof r> => r !== null);
 
     if (validRecords.length > 0) {
-      // @ts-ignore
+      // @ts-expect-error — this Pinecone client version's upsert() signature mismatches its own types; verified working at runtime
       await index.upsert(validRecords);
     }
     

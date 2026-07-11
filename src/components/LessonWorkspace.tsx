@@ -6,22 +6,24 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
-import { WeekUnit, UploadedFile, ChatMessage, EducationalResource, TemplateConfig, Classroom } from '@/lib/types';
+import { WeekUnit, UploadedFile, ChatMessage, EducationalResource, TemplateConfig, Classroom, LessonContent } from '@/lib/types';
 import { computeSettingsHash } from '@/lib/classHash';
 import { generateLessonPlan, generatePresentation, generateWorksheet, generateAssignment, generateAssessment, generateMemo, generateGame, generateResources, refineContent, generateEducationalImage } from '@/lib/gemini';
-import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, Trash2, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, LayoutTemplate, PenTool, GripVertical, Download, ChevronDown, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, Download, ChevronDown, AlertTriangle, LucideIcon } from 'lucide-react';
 
 interface LessonWorkspaceProps {
   units: WeekUnit[];
   activeClass: Classroom;
   onBack: () => void;
-  onSaveClassContent: (classId: string, unitId: string, content: any) => void;
+  onSaveClassContent: (classId: string, unitId: string, content: LessonContent) => void;
   onContentGenerated?: () => void;
   imagesLeft: number;
 }
 
 type MainTab = 'plan' | 'slides' | 'game' | 'resources' | 'visuals';
 type ResourceType = 'worksheet' | 'assignment' | 'test';
+type GenerationError = { code?: string; message?: string };
+const asGenerationError = (e: unknown): GenerationError => e as GenerationError;
 
 const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, onBack, onSaveClassContent, onContentGenerated, imagesLeft }) => {
   const isRevisionMode = units.length > 1;
@@ -43,7 +45,6 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
-  const [generatingMemo, setGeneratingMemo] = useState(false);
   const [templateConfig, setTemplateConfig] = useState<TemplateConfig>({ schoolName: '', logo: null, font: 'modern', layout: 'standard' });
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [isCreationModalOpen, setIsCreationModalOpen] = useState(false);
@@ -136,13 +137,14 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         if (type === 'resources') setResources(content);
         onContentGenerated?.();
       }
-    } catch (e: any) {
-      if (e.code === 'LIMIT_REACHED') {
+    } catch (e: unknown) {
+      const err = asGenerationError(e);
+      if (err.code === 'LIMIT_REACHED') {
         if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
-      } else if (type === 'visuals' && e.message && (e.message.includes('400') || e.message.includes('429') || e.message.includes('paid plan') || e.message.includes('Quota'))) {
+      } else if (type === 'visuals' && err.message && (err.message.includes('400') || err.message.includes('429') || err.message.includes('paid plan') || err.message.includes('Quota'))) {
         alert("Image generation requires a Paid/Pro Gemini API key (Free Tier quota is 0).");
       } else {
-        alert(e.message || 'Error generating content.');
+        alert(err.message || 'Error generating content.');
       }
       console.error(e);
     } finally { setLoading(false); }
@@ -170,11 +172,12 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       }
       setActiveSection('educational'); setSelectedResourceId(id); setResourceViewMode('content');
       onContentGenerated?.();
-    } catch (e: any) {
-      if (e.code === 'LIMIT_REACHED') {
+    } catch (e: unknown) {
+      const err = asGenerationError(e);
+      if (err.code === 'LIMIT_REACHED') {
         if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
       } else {
-        alert(e.message || 'Error creating resource.');
+        alert(err.message || 'Error creating resource.');
       }
       console.error(e);
     } finally { setLoading(false); setCreationType(null); }
@@ -214,11 +217,12 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       }
       setChatHistory(p => [...p, { id: Date.now().toString(), role: 'ai', text: "Content updated successfully." }]);
       onContentGenerated?.();
-    } catch (e: any) {
-      if (e.code === 'LIMIT_REACHED') {
+    } catch (e: unknown) {
+      const err = asGenerationError(e);
+      if (err.code === 'LIMIT_REACHED') {
         if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
       } else {
-        alert(e.message || 'Error refining content.');
+        alert(err.message || 'Error refining content.');
       }
       console.error(e);
     } finally { setIsRefining(false); }
@@ -294,13 +298,14 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       const url = await generateEducationalImage(units[0], imageDescription.trim() || undefined);
       setGeneratedImageUrl(url);
       onContentGenerated?.();
-    } catch (e: any) {
-      if (e.code === 'IMAGE_LIMIT_REACHED') {
+    } catch (e: unknown) {
+      const err = asGenerationError(e);
+      if (err.code === 'IMAGE_LIMIT_REACHED') {
         alert('Daily image limit reached. Resets tomorrow. Upgrade to Pro for 10 images/day.');
-      } else if (e.code === 'SAFETY_BLOCK') {
+      } else if (err.code === 'SAFETY_BLOCK') {
         alert('Image could not be generated — try rephrasing your description.');
       } else {
-        alert(e.message || 'Image generation is temporarily unavailable. Try again shortly.');
+        alert(err.message || 'Image generation is temporarily unavailable. Try again shortly.');
       }
     } finally {
       setLoading(false);
@@ -330,8 +335,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         generated++;
         setSlideImageProgress(prev => ({ ...prev, current: generated }));
         onContentGenerated?.();
-      } catch (e: any) {
-        if (e.code === 'IMAGE_LIMIT_REACHED') break;
+      } catch (e: unknown) {
+        if (asGenerationError(e).code === 'IMAGE_LIMIT_REACHED') break;
         console.error(`Failed slide ${slideNumber}:`, e);
       }
     }
@@ -664,11 +669,12 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                           setAssignments(prev => prev.map(t => t.id === res.id ? {...t, memo: m} : t));
                           setWorksheets(prev => prev.map(t => t.id === res.id ? {...t, memo: m} : t));
                           onContentGenerated?.();
-                        } catch (e: any) {
-                          if (e.code === 'LIMIT_REACHED') {
+                        } catch (e: unknown) {
+                          const err = asGenerationError(e);
+                          if (err.code === 'LIMIT_REACHED') {
                             if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
                           } else {
-                            alert(e.message || 'Error generating memo. Content might be too large.');
+                            alert(err.message || 'Error generating memo. Content might be too large.');
                           }
                         } finally {
                           setLoading(false);
@@ -770,8 +776,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">Font Style</label>
                 <div className="grid grid-cols-3 gap-2">
-                  {['modern', 'classic', 'playful'].map(f => (
-                    <button key={f} onClick={() => setTemplateConfig(p => ({...p, font: f as any}))} className={`p-2 border rounded-lg text-sm capitalize ${templateConfig.font === f ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold' : 'text-slate-600'}`}>{f}</button>
+                  {(['modern', 'classic', 'playful'] as const).map(f => (
+                    <button key={f} onClick={() => setTemplateConfig(p => ({...p, font: f}))} className={`p-2 border rounded-lg text-sm capitalize ${templateConfig.font === f ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold' : 'text-slate-600'}`}>{f}</button>
                   ))}
                 </div>
               </div>
@@ -786,7 +792,13 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   );
 };
 
-const EmptyState = ({ icon: Icon, label, action }: any) => (
+interface EmptyStateProps {
+  icon: LucideIcon;
+  label: string;
+  action: () => void;
+}
+
+const EmptyState = ({ icon: Icon, label, action }: EmptyStateProps) => (
   <div className="flex flex-col items-center justify-center py-32 text-center opacity-60 hover:opacity-100 transition-opacity">
     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4"><Icon className="w-8 h-8 text-slate-300" /></div>
     <h3 className="text-xl font-bold text-slate-700 mb-2">No {label}</h3>
@@ -820,7 +832,7 @@ const RenderMarkdown = ({
       remarkPlugins={[remarkGfm, remarkMath]}
       rehypePlugins={[rehypeKatex]}
       components={{
-        h2: ({ children: h2Children, node, ...props }) => {
+        h2: ({ children: h2Children, node: _node, ...props }) => {
           if (docType === 'teacher') {
             const color =
               TEACHER_H2_COLORS[Math.min(h2Index, TEACHER_H2_COLORS.length - 1)];
@@ -867,7 +879,7 @@ const RenderMarkdown = ({
             </h2>
           );
         },
-        h1: ({ children: h1Children, node, ...props }) => {
+        h1: ({ children: h1Children, node: _node, ...props }) => {
           if (docType === 'student') {
             return (
               <h1
@@ -887,7 +899,7 @@ const RenderMarkdown = ({
           }
           return <h1 {...props}>{h1Children}</h1>;
         },
-        hr: ({ node, ...props }) => (
+        hr: ({ node: _node, ...props }) => (
           <hr
             style={{
               border: 'none',
@@ -897,7 +909,7 @@ const RenderMarkdown = ({
             {...props}
           />
         ),
-        table: ({ node, ...props }) => (
+        table: ({ node: _node, ...props }) => (
           <div className="overflow-x-auto my-6">
             <table
               className="min-w-full text-sm divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden"
@@ -905,14 +917,14 @@ const RenderMarkdown = ({
             />
           </div>
         ),
-        thead: ({ node, ...props }) => <thead className="bg-slate-50" {...props} />,
-        th: ({ node, ...props }) => (
+        thead: ({ node: _node, ...props }) => <thead className="bg-slate-50" {...props} />,
+        th: ({ node: _node, ...props }) => (
           <th
             className="px-4 py-3 text-left font-bold text-slate-700 uppercase tracking-wider"
             {...props}
           />
         ),
-        td: ({ node, ...props }) => (
+        td: ({ node: _node, ...props }) => (
           <td className="px-4 py-3 border-t border-slate-200" {...props} />
         ),
       }}
@@ -922,7 +934,17 @@ const RenderMarkdown = ({
   );
 };
 
-const NavButton = ({ icon: Icon, label, active, onClick, collapsed, hasContent, isOutdated }: any) => (
+interface NavButtonProps {
+  icon: LucideIcon;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  collapsed: boolean;
+  hasContent: boolean;
+  isOutdated: boolean;
+}
+
+const NavButton = ({ icon: Icon, label, active, onClick, collapsed, hasContent, isOutdated }: NavButtonProps) => (
   <button onClick={onClick} className={`w-full flex items-center gap-3 p-2 rounded-lg transition-all ${active ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>
     <Icon className={`w-5 h-5 ${active ? 'text-blue-600' : 'text-slate-400'}`} />
     {!collapsed && <span className={`flex-1 text-left text-sm font-medium ${active ? 'font-bold' : ''}`}>{label}</span>}

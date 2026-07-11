@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { auth } from '@clerk/nextjs/server';
+import Link from 'next/link';
 
 /**
  * Root page: if not logged in, show a landing page with sign-in link.
@@ -35,12 +36,12 @@ export default async function RootPage() {
         </div>
 
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <a href="/sign-up" className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/30 transition-all hover:-translate-y-1 text-lg">
+          <Link href="/sign-up" className="px-8 py-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl shadow-xl shadow-blue-900/30 transition-all hover:-translate-y-1 text-lg">
             Start Free — 10 Daily Generations
-          </a>
-          <a href="/sign-in" className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold rounded-xl transition-all hover:-translate-y-1 text-lg">
+          </Link>
+          <Link href="/sign-in" className="px-8 py-4 bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold rounded-xl transition-all hover:-translate-y-1 text-lg">
             Sign In
-          </a>
+          </Link>
         </div>
 
         <div className="text-slate-500 text-sm mt-8 space-y-3">

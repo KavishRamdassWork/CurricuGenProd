@@ -49,8 +49,8 @@ export async function POST(req: NextRequest) {
     });
 
     return NextResponse.json({ classroom }, { status: 201 });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Classroom creation error:', error);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Internal Server Error' }, { status: 500 });
   }
 }

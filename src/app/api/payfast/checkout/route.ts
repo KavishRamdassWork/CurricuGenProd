@@ -11,7 +11,7 @@ const PAYFAST_URI = process.env.NODE_ENV === 'production' && process.env.PAYFAST
   ? 'https://www.payfast.co.za/eng/process'
   : 'https://sandbox.payfast.co.za/eng/process';
 
-export async function POST(req: NextRequest) {
+export async function POST(_req: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) {
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Build PayFast Data Mapping
-    const paymentData: any = {
+    const paymentData: Record<string, string> = {
       merchant_id: MERCHANT_ID,
       merchant_key: MERCHANT_KEY,
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard?success=1`,

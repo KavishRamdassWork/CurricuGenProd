@@ -5,6 +5,14 @@
  */
 import { Blueprint, WeekUnit, UploadedFile, Student, ClassAnalysis, Classroom } from './types';
 
+export class ApiError extends Error {
+  code: string;
+  constructor(message: string, code: string) {
+    super(message);
+    this.code = code;
+  }
+}
+
 async function apiPost<T>(endpoint: string, body: object): Promise<T> {
   const res = await fetch(`/api/generate/${endpoint}`, {
     method: 'POST',
@@ -14,9 +22,7 @@ async function apiPost<T>(endpoint: string, body: object): Promise<T> {
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({ error: 'Request failed', code: 'UNKNOWN' }));
-    const error: any = new Error(err.error || `Request failed with status ${res.status}`);
-    error.code = err.code || 'UNKNOWN';
-    throw error;
+    throw new ApiError(err.error || `Request failed with status ${res.status}`, err.code || 'UNKNOWN');
   }
   return res.json();
 }

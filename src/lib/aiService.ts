@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Part } from "@google/genai";
 import { Blueprint, WeekUnit, UploadedFile, Student, ClassAnalysis, Classroom } from "@/lib/types";
 import { Pinecone } from '@pinecone-database/pinecone';
 import { getPhaseForGrade } from './curriculumHelper';
@@ -206,7 +206,7 @@ export async function generateLessonPlanServer(classroom: Classroom, units: Week
     [How to close the lesson and the exit ticket activity]
   `;
 
-  const parts: any[] = [{ text: basePrompt }];
+  const parts: Part[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
@@ -247,7 +247,7 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
     [Critical thinking and extension questions. Each question worth 5+ marks.]
   `;
 
-  const parts: any[] = [{ text: basePrompt }];
+  const parts: Part[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
@@ -288,7 +288,7 @@ export async function generateAssignmentServer(classroom: Classroom, unit: WeekU
     ## Section C — Assessment Rubric
     [A table with: Criteria | Excellent | Satisfactory | Needs Improvement | Marks. Cover the key learning outcome.]
   `;
-  const parts: any[] = [{ text: basePrompt }];
+  const parts: Part[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
@@ -334,7 +334,7 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
     ## Section C — Extended Response ([X] marks)
     [Essay-style or extended problem questions. Show mark allocation and include any scaffolding prompts.]
   `;
-  const parts: any[] = [{ text: basePrompt }];
+  const parts: Part[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
@@ -453,7 +453,7 @@ export async function generateGameServer(classroom: Classroom, unit: WeekUnit, f
     ## Debrief Questions
     [3–5 discussion questions to run after the game to consolidate learning]
   `;
-  const parts: any[] = [{ text: basePrompt }];
+  const parts: Part[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
@@ -489,7 +489,7 @@ export async function generateResourcesServer(classroom: Classroom, unit: WeekUn
     ## Teacher Notes
     [Tips for how to use these resources in class or assign them as homework]
   `;
-  const parts: any[] = [{ text: basePrompt }];
+  const parts: Part[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({
@@ -519,7 +519,7 @@ export async function refineContentServer(currentContent: string, instruction: s
     3. Return ONLY the updated Markdown. No explanation, no preamble, no commentary.
   `;
 
-  const parts: any[] = [{ text: basePrompt }];
+  const parts: Part[] = [{ text: basePrompt }];
   if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
   const response = await ai.models.generateContent({

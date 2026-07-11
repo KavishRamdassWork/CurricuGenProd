@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateResourcesServer } from '@/lib/aiService';
 import { requireGenerationAccess, consumeGeneration } from '@/lib/authGuard';
+import { Classroom, WeekUnit } from '@/lib/types';
 import { z } from 'zod';
 
 const schema = z.object({
-  classroom: z.any(), unit: z.any(),
+  classroom: z.custom<Classroom>(), unit: z.custom<WeekUnit>(),
   file: z.object({ name: z.string(), mimeType: z.string(), data: z.string() }).optional(),
 });
 
@@ -16,7 +17,7 @@ export async function POST(req: NextRequest) {
     const content = await generateResourcesServer(classroom, unit, file);
     await consumeGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ content });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Generation failed' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
   }
 }

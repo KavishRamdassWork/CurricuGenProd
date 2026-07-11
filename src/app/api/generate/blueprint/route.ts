@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateBlueprintServer } from '@/lib/aiService';
 import { requireGenerationAccess, consumeGeneration } from '@/lib/authGuard';
+import { Classroom, Student } from '@/lib/types';
 import { z } from 'zod';
 
 const classroomSchema = z.object({
@@ -15,7 +16,7 @@ const classroomSchema = z.object({
   learningStyles: z.array(z.string()).optional(),
   accommodations: z.string().nullable().optional(),
   studentInterests: z.string().nullable().optional(),
-  students: z.array(z.any()).default([]),
+  students: z.array(z.custom<Student>()).default([]),
   assessmentColumns: z.array(z.string()).default([]),
 });
 
@@ -26,11 +27,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const classroom = classroomSchema.parse(body.classroom);
-    const blueprint = await generateBlueprintServer(classroom as any);
+    const blueprint = await generateBlueprintServer(classroom as Classroom);
     await consumeGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ blueprint });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Blueprint generation error:', error);
-    return NextResponse.json({ error: error.message || 'Generation failed' }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
   }
 }

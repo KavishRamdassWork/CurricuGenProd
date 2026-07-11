@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { Plan } from '@prisma/client';
 
 /** GET /api/user/me — get current user's profile and subscription status */
 export async function GET() {
@@ -24,7 +25,7 @@ export async function GET() {
       .filter(Boolean);
 
     const isBeta = email && betaEmails.includes(email.toLowerCase());
-    const plan = (isBeta ? 'BETA' : 'FREE') as any;
+    const plan: Plan = isBeta ? 'BETA' : 'FREE';
 
     try {
       dbUser = await prisma.user.create({

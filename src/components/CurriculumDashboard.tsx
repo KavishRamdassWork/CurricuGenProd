@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Blueprint, WeekUnit, Classroom } from '@/lib/types';
-import { Target, Plus, Trash2, Clock, Edit3, CheckSquare, ArrowRight, LayoutList, Sparkles, Wand2, Pencil } from 'lucide-react';
+import { Target, Plus, Trash2, Clock, Edit3, CheckSquare, ArrowRight, Sparkles, Pencil } from 'lucide-react';
 
 interface CurriculumDashboardProps {
   blueprint: Blueprint;
@@ -192,7 +192,7 @@ const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, ac
                                    <div className="flex items-center gap-2 text-[10px] font-extrabold text-emerald-600 uppercase tracking-widest mb-3">
                                       <Target className="w-4 h-4" /> Expected Outcome
                                    </div>
-                                   <p className="text-sm text-slate-700 font-medium leading-relaxed italic border-l-2 border-emerald-200 pl-3">"{unit.learningOutcome}"</p>
+                                   <p className="text-sm text-slate-700 font-medium leading-relaxed italic border-l-2 border-emerald-200 pl-3">&ldquo;{unit.learningOutcome}&rdquo;</p>
                                 </div>
                              </div>
                           )}

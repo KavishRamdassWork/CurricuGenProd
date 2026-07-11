@@ -41,7 +41,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     'students', 'assessmentColumns', 'savedLessons', 'analysis',
   ];
 
-  const data: Record<string, any> = {};
+  const data: Record<string, unknown> = {};
   for (const field of allowedFields) {
     if (field in body) data[field] = body[field];
   }

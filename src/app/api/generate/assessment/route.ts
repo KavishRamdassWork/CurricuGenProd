@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateAssessmentServer } from '@/lib/aiService';
 import { requireGenerationAccess, consumeGeneration } from '@/lib/authGuard';
+import { Classroom, WeekUnit } from '@/lib/types';
 import { z } from 'zod';
 
 const schema = z.object({
-  classroom: z.any(), unit: z.any(),
+  classroom: z.custom<Classroom>(), unit: z.custom<WeekUnit>(),
   file: z.object({ name: z.string(), mimeType: z.string(), data: z.string() }).optional(),
   userInstruction: z.string().max(300).optional(),
-  scopeUnits: z.array(z.any()).optional(),
+  scopeUnits: z.array(z.custom<WeekUnit>()).optional(),
 });
 
 export async function POST(req: NextRequest) {
@@ -19,7 +20,7 @@ export async function POST(req: NextRequest) {
     const content = await generateAssessmentServer(classroom, unit, file, userInstruction, scopeUnits);
     await consumeGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ content });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Generation failed' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
   }
 }

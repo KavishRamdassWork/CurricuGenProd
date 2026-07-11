@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Classroom, Student, ClassAnalysis } from '@/lib/types';
+import { Classroom, Student } from '@/lib/types';
 import { CURRICULUMS, GRADES, SUBJECTS_COMMON } from '@/lib/constants';
 import { generateMarksTemplate, parseMarksTemplate } from '@/lib/excelHelper';
 import { analyzeClassPerformance } from '@/lib/gemini';

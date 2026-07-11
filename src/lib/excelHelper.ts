@@ -11,7 +11,7 @@ export const parseStudentList = async (file: File): Promise<Student[]> => {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as (string | number | undefined)[][];
 
         const students: Student[] = [];
         for (let i = 1; i < jsonData.length; i++) {
@@ -19,7 +19,7 @@ export const parseStudentList = async (file: File): Promise<Student[]> => {
           if (row && row[0]) {
             students.push({
               id: row[1] ? String(row[1]) : `ST-${Date.now()}-${i}`,
-              name: row[0],
+              name: String(row[0]),
               marks: {},
               average: 0,
               riskLevel: 'Low',
@@ -44,7 +44,7 @@ export const parseMarksTemplate = async (file: File): Promise<{ students: Studen
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as (string | number | undefined)[][];
 
         const headers = jsonData[0] as string[];
         const assessmentNames = headers.slice(2);
@@ -58,7 +58,7 @@ export const parseMarksTemplate = async (file: File): Promise<{ students: Studen
             let count = 0;
 
             assessmentNames.forEach((assess, idx) => {
-              const mark = parseFloat(row[idx + 2]);
+              const mark = parseFloat(String(row[idx + 2]));
               if (!isNaN(mark)) {
                 marks[assess] = mark;
                 total += mark;
@@ -67,7 +67,7 @@ export const parseMarksTemplate = async (file: File): Promise<{ students: Studen
             });
 
             students.push({
-              name: row[0],
+              name: String(row[0]),
               id: row[1] ? String(row[1]) : `ST-${Date.now()}-${i}`,
               marks,
               average: count > 0 ? parseFloat((total / count).toFixed(1)) : 0,

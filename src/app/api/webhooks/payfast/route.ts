@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       return new NextResponse("Invalid Signature", { status: 400 });
     }
 
-    const { payment_status, item_name, custom_str1, token } = data;
+    const { payment_status, custom_str1, token } = data;
     const clerkId = custom_str1;
 
     if (!clerkId) {

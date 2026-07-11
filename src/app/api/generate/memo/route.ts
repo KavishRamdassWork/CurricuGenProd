@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateMemoServer } from '@/lib/aiService';
 import { requireGenerationAccess, consumeGeneration } from '@/lib/authGuard';
+import { Classroom } from '@/lib/types';
 import { z } from 'zod';
 
-const schema = z.object({ contentToGrade: z.string().max(30000), classroom: z.any() });
+const schema = z.object({ contentToGrade: z.string().max(30000), classroom: z.custom<Classroom>() });
 
 export async function POST(req: NextRequest) {
   const guard = await requireGenerationAccess();
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
     const content = await generateMemoServer(contentToGrade, classroom);
     await consumeGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ content });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Generation failed' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
   }
 }

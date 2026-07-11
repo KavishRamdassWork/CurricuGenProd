@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
     const content = await refineContentServer(currentContent, instruction, contextType, file);
     await consumeGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ content });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message || 'Generation failed' }, { status: 500 });
+  } catch (error: unknown) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
   }
 }
