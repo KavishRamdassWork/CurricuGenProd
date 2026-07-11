@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { Blueprint, WeekUnit, Classroom } from '@/lib/types';
-import { Target, Plus, Trash2, Clock, Edit3, CheckSquare, ArrowRight, LayoutList, Sparkles, Wand2 } from 'lucide-react';
+import { Target, Plus, Trash2, Clock, Edit3, CheckSquare, ArrowRight, LayoutList, Sparkles, Wand2, Pencil } from 'lucide-react';
 
 interface CurriculumDashboardProps {
   blueprint: Blueprint;
@@ -10,9 +10,10 @@ interface CurriculumDashboardProps {
   onSelectUnits: (units: WeekUnit[]) => void;
   onUpdateBlueprint: (blueprint: Blueprint) => void;
   onReset: () => void;
+  onEditClass: () => void;
 }
 
-const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, activeClass, onSelectUnits, onUpdateBlueprint, onReset }) => {
+const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, activeClass, onSelectUnits, onUpdateBlueprint, onReset, onEditClass }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedWeekIndices, setSelectedWeekIndices] = useState<number[]>([]);
 
@@ -90,7 +91,14 @@ const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, ac
         </div>
         
         <div className="flex gap-3 flex-shrink-0">
-           <button 
+           <button
+             onClick={onEditClass}
+             className="flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 shadow-sm bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:-translate-y-0.5"
+           >
+             <Pencil className="w-4 h-4" />
+             Edit Class
+           </button>
+           <button
              onClick={() => setIsEditing(!isEditing)}
              className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 shadow-sm ${
                isEditing 

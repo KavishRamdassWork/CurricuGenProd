@@ -335,6 +335,7 @@ const Dashboard = () => {
               onSelectUnits={handleOpenWorkspace}
               onUpdateBlueprint={handleUpdateBlueprint}
               onReset={handleBackToClasses}
+              onEditClass={() => setEditingClass(activeClass)}
             />
           )}
           {appState === AppState.LESSON_VIEW && activeClass && selectedUnits.length > 0 && (
