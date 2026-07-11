@@ -534,8 +534,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                 <button onClick={() => setResourceViewMode('memo')} className={`px-3 py-1 text-xs font-bold rounded-md ${resourceViewMode === 'memo' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500'}`}>Memo</button>
               </div>
             )}
-            <button onClick={() => setIsTemplateModalOpen(true)} className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Settings className="w-5 h-5" /></button>
-            <button onClick={() => setIsChatOpen(!isChatOpen)} className={`p-2 rounded-lg transition-colors flex-shrink-0 ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="w-5 h-5" /></button>
+            <button onClick={() => setIsTemplateModalOpen(true)} className="hidden md:inline-flex p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Settings className="w-5 h-5" /></button>
+            <button onClick={() => setIsChatOpen(!isChatOpen)} className={`hidden md:inline-flex p-2 rounded-lg transition-colors flex-shrink-0 ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="w-5 h-5" /></button>
             {/* Download Dropdown */}
             <div className="relative flex-shrink-0">
               <button
