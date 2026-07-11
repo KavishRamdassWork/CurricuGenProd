@@ -234,21 +234,21 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
                        <button
                           title="Edit Class"
                           onClick={(e) => { e.stopPropagation(); onOpenEditClass?.(cls); }}
-                          className="min-w-12 min-h-12 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 transition-all duration-300"
+                          className="min-w-12 min-h-12 md:min-w-0 md:min-h-0 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 transition-all duration-300"
                        >
                           <Pencil className="w-4 h-4" />
                        </button>
                        <button
                           title="Class Analytics"
                           onClick={(e) => { e.stopPropagation(); setActiveAnalysisClassId(cls.id); }}
-                          className="min-w-12 min-h-12 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 transition-all duration-300"
+                          className="min-w-12 min-h-12 md:min-w-0 md:min-h-0 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 transition-all duration-300"
                        >
                           <BarChart2 className="w-4 h-4" />
                        </button>
                        <button
                           title="Delete Class"
                           onClick={(e) => { e.stopPropagation(); setDeleteTargetId(cls.id); }}
-                          className="min-w-12 min-h-12 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-600 transition-all duration-300"
+                          className="min-w-12 min-h-12 md:min-w-0 md:min-h-0 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-600 transition-all duration-300"
                        >
                           <Trash2 className="w-4 h-4" />
                        </button>
