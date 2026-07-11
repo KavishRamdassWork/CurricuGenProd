@@ -7,8 +7,9 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { WeekUnit, UploadedFile, ChatMessage, EducationalResource, TemplateConfig, Classroom } from '@/lib/types';
+import { computeSettingsHash } from '@/lib/classHash';
 import { generateLessonPlan, generatePresentation, generateWorksheet, generateAssignment, generateAssessment, generateMemo, generateGame, generateResources, refineContent, generateEducationalImage } from '@/lib/gemini';
-import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, Trash2, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, LayoutTemplate, PenTool, GripVertical, Download, ChevronDown } from 'lucide-react';
+import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, Trash2, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, LayoutTemplate, PenTool, GripVertical, Download, ChevronDown, AlertTriangle } from 'lucide-react';
 
 interface LessonWorkspaceProps {
   units: WeekUnit[];
@@ -25,6 +26,8 @@ type ResourceType = 'worksheet' | 'assignment' | 'test';
 const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, onBack, onSaveClassContent, onContentGenerated, imagesLeft }) => {
   const isRevisionMode = units.length > 1;
   const unitKey = isRevisionMode ? `revision-${units.map(u => u.weekNumber).join('-')}` : `${units[0].weekNumber}-${units[0].topicTitle}`;
+  const savedHash = activeClass.savedLessons?.[unitKey]?.settingsHash;
+  const isUnitOutdated = !!savedHash && savedHash !== computeSettingsHash(activeClass);
 
   const [activeSection, setActiveSection] = useState<MainTab | 'educational'>('plan');
   const [selectedResourceId, setSelectedResourceId] = useState<string | null>(null);
@@ -91,6 +94,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       tests,
       imageUrl: generatedImageUrl || '',
       slideImages,
+      settingsHash: computeSettingsHash(activeClass),
     });
   }, [lessonPlan, slides, worksheets, assignments, tests, generatedImageUrl, slideImages]);
 
@@ -394,8 +398,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
           <div>
             {!isSidebarCollapsed && <h3 className="px-2 text-xs font-bold text-slate-400 uppercase mb-2">Teacher Guide</h3>}
             <div className="space-y-1">
-              <NavButton icon={BookOpen} label="Lesson Plan" active={activeSection === 'plan'} onClick={() => setActiveSection('plan')} collapsed={isSidebarCollapsed} hasContent={!!lessonPlan} />
-              <NavButton icon={MonitorPlay} label="Slides" active={activeSection === 'slides'} onClick={() => setActiveSection('slides')} collapsed={isSidebarCollapsed} hasContent={!!slides} />
+              <NavButton icon={BookOpen} label="Lesson Plan" active={activeSection === 'plan'} onClick={() => setActiveSection('plan')} collapsed={isSidebarCollapsed} hasContent={!!lessonPlan} isOutdated={isUnitOutdated && !!lessonPlan} />
+              <NavButton icon={MonitorPlay} label="Slides" active={activeSection === 'slides'} onClick={() => setActiveSection('slides')} collapsed={isSidebarCollapsed} hasContent={!!slides} isOutdated={isUnitOutdated && !!slides} />
             </div>
           </div>
           <div>
@@ -417,9 +421,9 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
           <div>
             {!isSidebarCollapsed && <h3 className="px-2 text-xs font-bold text-slate-400 uppercase mb-2">Enhancements</h3>}
             <div className="space-y-1">
-              <NavButton icon={ImageIcon} label="Visual Aids" active={activeSection === 'visuals'} onClick={() => setActiveSection('visuals')} collapsed={isSidebarCollapsed} hasContent={!!generatedImageUrl} />
-              <NavButton icon={Gamepad2} label="Activity" active={activeSection === 'game'} onClick={() => setActiveSection('game')} collapsed={isSidebarCollapsed} hasContent={!!game} />
-              <NavButton icon={Library} label="Links" active={activeSection === 'resources'} onClick={() => setActiveSection('resources')} collapsed={isSidebarCollapsed} hasContent={!!resources} />
+              <NavButton icon={ImageIcon} label="Visual Aids" active={activeSection === 'visuals'} onClick={() => setActiveSection('visuals')} collapsed={isSidebarCollapsed} hasContent={!!generatedImageUrl} isOutdated={isUnitOutdated && !!generatedImageUrl} />
+              <NavButton icon={Gamepad2} label="Activity" active={activeSection === 'game'} onClick={() => setActiveSection('game')} collapsed={isSidebarCollapsed} hasContent={!!game} isOutdated={isUnitOutdated && !!game} />
+              <NavButton icon={Library} label="Links" active={activeSection === 'resources'} onClick={() => setActiveSection('resources')} collapsed={isSidebarCollapsed} hasContent={!!resources} isOutdated={isUnitOutdated && !!resources} />
             </div>
           </div>
         </div>
@@ -918,11 +922,16 @@ const RenderMarkdown = ({
   );
 };
 
-const NavButton = ({ icon: Icon, label, active, onClick, collapsed, hasContent }: any) => (
+const NavButton = ({ icon: Icon, label, active, onClick, collapsed, hasContent, isOutdated }: any) => (
   <button onClick={onClick} className={`w-full flex items-center gap-3 p-2 rounded-lg transition-all ${active ? 'bg-blue-50 text-blue-700 shadow-sm' : 'text-slate-500 hover:bg-slate-50'}`}>
     <Icon className={`w-5 h-5 ${active ? 'text-blue-600' : 'text-slate-400'}`} />
     {!collapsed && <span className={`flex-1 text-left text-sm font-medium ${active ? 'font-bold' : ''}`}>{label}</span>}
-    {!collapsed && hasContent && <Check className="w-3 h-3 text-green-500" />}
+    {!collapsed && isOutdated && (
+      <span className="bg-amber-100 text-amber-700 text-[9px] font-extrabold px-1.5 py-0.5 rounded-md uppercase tracking-wide flex items-center gap-1">
+        <AlertTriangle className="w-2.5 h-2.5" /> Outdated
+      </span>
+    )}
+    {!collapsed && !isOutdated && hasContent && <Check className="w-3 h-3 text-green-500" />}
   </button>
 );
 
