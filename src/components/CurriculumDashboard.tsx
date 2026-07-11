@@ -93,14 +93,14 @@ const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, ac
         <div className="flex gap-3 flex-shrink-0">
            <button
              onClick={onEditClass}
-             className="flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 shadow-sm bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:-translate-y-0.5"
+             className="min-h-12 flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 shadow-sm bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:-translate-y-0.5"
            >
              <Pencil className="w-4 h-4" />
              Edit Class
            </button>
            <button
              onClick={() => setIsEditing(!isEditing)}
-             className={`flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 shadow-sm ${
+             className={`min-h-12 flex items-center gap-2 px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 shadow-sm ${
                isEditing 
                  ? 'bg-emerald-600 text-white shadow-emerald-600/20 hover:bg-emerald-500 hover:-translate-y-0.5' 
                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:-translate-y-0.5'
