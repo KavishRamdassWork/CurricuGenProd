@@ -1,23 +1,26 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Classroom, Student, ClassAnalysis } from '@/lib/types';
 import { CURRICULUMS, GRADES, SUBJECTS_COMMON } from '@/lib/constants';
 import { generateMarksTemplate, parseMarksTemplate } from '@/lib/excelHelper';
 import { analyzeClassPerformance } from '@/lib/gemini';
-import { Users, Plus, ArrowRight, X, BarChart2, Download, Upload, AlertTriangle, TrendingUp, Sparkles, PieChart, Loader2, BrainCircuit, Heart, Fingerprint, BookOpen, HelpCircle } from 'lucide-react';
+import { Users, Plus, ArrowRight, X, BarChart2, Download, Upload, AlertTriangle, TrendingUp, Sparkles, PieChart, Loader2, BrainCircuit, Heart, Fingerprint, BookOpen, HelpCircle, Pencil, Trash2 } from 'lucide-react';
 
 interface ClassManagerProps {
   classes: Classroom[];
   setClasses: React.Dispatch<React.SetStateAction<Classroom[]>>;
   onOpenClass: (classroom: Classroom) => void;
   onCreateClass?: (classroom: Omit<Classroom, 'id'>) => Promise<Classroom | null>;
+  onUpdateClass?: (classroomId: string, patch: Partial<Classroom>) => Promise<Classroom | null>;
   onDeleteClass?: (classroomId: string) => Promise<void>;
+  editingClass?: Classroom | null;
+  onCloseEdit?: () => void;
 }
 
 const LEARNING_STYLES = ['Visual', 'Auditory', 'Reading/Writing', 'Kinesthetic', 'Logical', 'Social', 'Solitary'];
 
-const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpenClass, onCreateClass, onDeleteClass }) => {
+const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpenClass, onCreateClass, onUpdateClass, onDeleteClass, editingClass, onCloseEdit }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeAnalysisClassId, setActiveAnalysisClassId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -44,6 +47,23 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
     setLearningStyles(prev => prev.includes(style) ? prev.filter(s => s !== style) : [...prev, style]);
   };
 
+  useEffect(() => {
+    if (editingClass) {
+      setName(editingClass.name);
+      setSubject(editingClass.subject);
+      setGrade(editingClass.grade);
+      setCurriculum(editingClass.curriculum);
+      setStudentCount(editingClass.studentCount);
+      setPercentile(editingClass.averagePercentile);
+      setNotes(editingClass.teachingNotes);
+      setLearningStyles(editingClass.learningStyles ?? []);
+      setAccommodations(editingClass.accommodations ?? '');
+      setStudentInterests(editingClass.studentInterests ?? '');
+      setWizardStep(1);
+      setIsModalOpen(true);
+    }
+  }, [editingClass]);
+
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
     if (wizardStep === 1) {
@@ -65,16 +85,17 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
       averagePercentile: percentile,
       teachingNotes: notes,
       learningStyles, accommodations, studentInterests,
-      students: [],
-      assessmentColumns: [],
     };
     try {
-      if (onCreateClass) {
-        const created = await onCreateClass(classData);
+      if (editingClass && onUpdateClass) {
+        const updated = await onUpdateClass(editingClass.id, classData);
+        if (updated) { setIsModalOpen(false); resetForm(); onCloseEdit?.(); }
+      } else if (onCreateClass) {
+        const created = await onCreateClass({ ...classData, students: [], assessmentColumns: [] });
         if (created) { setIsModalOpen(false); resetForm(); onOpenClass(created); }
       } else {
         // Fallback for local use
-        const newClass: Classroom = { id: Date.now().toString(), ...classData };
+        const newClass: Classroom = { id: Date.now().toString(), ...classData, students: [], assessmentColumns: [] };
         setClasses(prev => [...prev, newClass]);
         setIsModalOpen(false); resetForm(); onOpenClass(newClass);
       }
@@ -251,10 +272,10 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
           <div className="bg-white/95 backdrop-blur-xl w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col max-h-[92vh] border border-white">
             <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center flex-none bg-white">
               <div>
-                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">New Class Profile</h2>
+                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">{editingClass ? 'Edit Class Profile' : 'New Class Profile'}</h2>
                  <p className="text-slate-500 text-sm font-medium">Step {wizardStep} of 2</p>
               </div>
-              <button title="Close Modal" onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-50 rounded-full hover:bg-slate-200 transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
+              <button title="Close Modal" onClick={() => { setIsModalOpen(false); onCloseEdit?.(); }} className="p-2 bg-slate-50 rounded-full hover:bg-slate-200 transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
             </div>
             
             <form onSubmit={handleCreateClass} className="p-8 overflow-y-auto flex-1 custom-scrollbar">
@@ -356,7 +377,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
                <div className="mt-10 pt-6 border-t border-slate-100 flex gap-4 justify-end">
                  {wizardStep === 1 ? (
                     <>
-                       <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Cancel</button>
+                       <button type="button" onClick={() => { setIsModalOpen(false); onCloseEdit?.(); }} className="px-8 py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Cancel</button>
                        <button type="button" onClick={() => { setWizardStep(2); setStepChangeTime(Date.now()); }} disabled={!name || !subject || !grade} className="px-10 py-4 rounded-full bg-blue-600 text-white font-extrabold shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
                           Next Step <ArrowRight className="w-5 h-5" />
                        </button>
@@ -365,7 +386,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
                     <>
                        <button type="button" onClick={() => setWizardStep(1)} className="px-8 py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Back</button>
                        <button type="submit" disabled={isCreating} className="px-10 py-4 rounded-full bg-slate-900 text-white font-extrabold shadow-xl shadow-slate-900/20 hover:bg-slate-800 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
-                          {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />} Create Workspace <ArrowRight className="w-5 h-5" />
+                          {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />} {editingClass ? 'Save Changes' : 'Create Workspace'} <ArrowRight className="w-5 h-5" />
                        </button>
                     </>
                  )}
