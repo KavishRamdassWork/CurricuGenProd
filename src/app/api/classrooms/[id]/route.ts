@@ -37,6 +37,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const allowedFields: string[] = [
     'name', 'subject', 'grade', 'curriculum', 'studentCount',
     'averagePercentile', 'teachingNotes', 'blueprint',
+    'learningStyles', 'accommodations', 'studentInterests',
     'students', 'assessmentColumns', 'savedLessons', 'analysis',
   ];
 
