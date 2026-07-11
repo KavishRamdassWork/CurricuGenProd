@@ -292,6 +292,45 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
     }
   };
 
+  const handlePptxDownload = async () => {
+    setIsDownloadOpen(false);
+    if (activeSection !== 'slides' || !slides) return;
+    setIsDownloadLoading(true);
+    try {
+      const res = await fetch('/api/export/pptx', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slidesMarkdown: slides,
+          slideImages,
+          title: `Slide Outline — ${units[0].topicTitle}`,
+          metadata: {
+            subject: activeClass.subject,
+            grade: activeClass.grade,
+            schoolName: templateConfig.schoolName || undefined,
+            logo: templateConfig.logo,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error((err as { error?: string }).error || 'PPTX generation failed');
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${units[0].topicTitle} - Slides.pptx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e: unknown) {
+      const err = asGenerationError(e);
+      alert(err.message || 'Could not generate PowerPoint file.');
+    } finally {
+      setIsDownloadLoading(false);
+    }
+  };
+
   const handleGenerateImage = async () => {
     setLoading(true);
     try {
@@ -503,6 +542,23 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                           <div className="text-xs text-slate-400">Editable .docx file</div>
                         </div>
                       </button>
+                      {activeSection === 'slides' && (
+                        <>
+                          <div className="border-t border-slate-100" />
+                          <button
+                            onClick={handlePptxDownload}
+                            disabled={!hasContent}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                            title={!hasContent ? 'Generate content first' : undefined}
+                          >
+                            <MonitorPlay className="w-4 h-4 text-orange-500" />
+                            <div className="text-left">
+                              <div className="font-bold">Download as PowerPoint</div>
+                              <div className="text-xs text-slate-400">.pptx — opens in PowerPoint or Google Slides</div>
+                            </div>
+                          </button>
+                        </>
+                      )}
                       <div className="border-t border-slate-100" />
                       <button
                         onClick={handlePdfDownload}
