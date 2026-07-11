@@ -899,7 +899,8 @@ const EmptyState = ({ icon: Icon, label, action }: EmptyStateProps) => (
   <div className="flex flex-col items-center justify-center py-32 text-center opacity-60 hover:opacity-100 transition-opacity">
     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4"><Icon className="w-8 h-8 text-slate-300" /></div>
     <h3 className="text-xl font-bold text-slate-700 mb-2">No {label}</h3>
-    <button onClick={action} className="flex items-center gap-2 text-blue-600 font-bold hover:underline"><Sparkles className="w-4 h-4" /> Generate Now</button>
+    <button onClick={action} className="hidden md:flex items-center gap-2 text-blue-600 font-bold hover:underline"><Sparkles className="w-4 h-4" /> Generate Now</button>
+    <p className="md:hidden text-sm text-slate-500 max-w-xs px-6">Content generation works best on desktop — open this class on a computer to create new content.</p>
   </div>
 );
 
