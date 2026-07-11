@@ -6,6 +6,7 @@ import ClassManager from '@/components/ClassManager';
 import CurriculumDashboard from '@/components/CurriculumDashboard';
 import LessonWorkspace from '@/components/LessonWorkspace';
 import { Blueprint, WeekUnit, AppState, Classroom } from '@/lib/types';
+import { computeSettingsHash } from '@/lib/classHash';
 import { Sparkles, Users, LayoutDashboard, Loader2, Menu, Zap, Crown } from 'lucide-react';
 
 interface DbUser {
@@ -25,6 +26,7 @@ const Dashboard = () => {
   const [isDbLoading, setIsDbLoading] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
+  const [editingClass, setEditingClass] = useState<Classroom | null>(null);
 
   const activeClass = classes.find(c => c.id === activeClassId);
 
@@ -148,8 +150,53 @@ const Dashboard = () => {
     }
   };
 
+  const promptRegenerateOrKeep = (updatedClass: Classroom) => {
+    const wantsRegen = window.confirm(
+      `You changed settings that affect AI-generated content.\n\n` +
+      `Regenerate the curriculum blueprint now? This uses one of your daily generations. ` +
+      `Existing lesson plans, slides, and resources will be marked outdated but not deleted — ` +
+      `you can regenerate individual items later, or keep using them as-is.\n\n` +
+      `Click Cancel to keep everything exactly as it is.`
+    );
+    if (wantsRegen) {
+      handleOpenClass({ ...updatedClass, blueprint: undefined });
+    }
+  };
+
+  const handleUpdateClass = async (classroomId: string, patch: Partial<Classroom>) => {
+    const before = classes.find(c => c.id === classroomId);
+    if (!before) return null;
+
+    const beforeHash = computeSettingsHash(before);
+    const afterHash = computeSettingsHash({ ...before, ...patch } as Classroom);
+
+    try {
+      const res = await fetch(`/api/classrooms/${classroomId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error('Failed to update classroom');
+      const { classroom: updated } = await res.json();
+      const full: Classroom = { ...before, ...updated };
+      setClasses(prev => prev.map(c => c.id === classroomId ? full : c));
+
+      if (beforeHash !== afterHash && full.blueprint && Object.keys(full.savedLessons || {}).length > 0) {
+        promptRegenerateOrKeep(full);
+      }
+      return full;
+    } catch (err) {
+      console.error(err);
+      return null;
+    }
+  };
+
   const handleDeleteClass = async (classroomId: string) => {
     setClasses(prev => prev.filter(c => c.id !== classroomId));
+    if (activeClassId === classroomId) {
+      setActiveClassId(null);
+      setAppState(AppState.CLASS_LIST);
+    }
     await fetch(`/api/classrooms/${classroomId}`, { method: 'DELETE' });
   };
 
@@ -274,7 +321,11 @@ const Dashboard = () => {
               setClasses={setClasses}
               onOpenClass={handleOpenClass}
               onCreateClass={handleCreateClass}
+              onUpdateClass={handleUpdateClass}
               onDeleteClass={handleDeleteClass}
+              editingClass={editingClass}
+              onOpenEditClass={setEditingClass}
+              onCloseEdit={() => setEditingClass(null)}
             />
           )}
           {appState === AppState.DASHBOARD && activeClass && activeClass.blueprint && (
