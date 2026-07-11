@@ -154,6 +154,12 @@ body {
   border-radius: 0;
 }
 
+/* ─── Mobile scroll behavior ────────────────────────────── */
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
 /* ─── Print Styles ─────────────────────────────── */
 @media print {
   /* Hide all UI chrome */
