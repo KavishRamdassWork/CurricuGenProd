@@ -21,6 +21,14 @@ interface LessonWorkspaceProps {
 }
 
 type MainTab = 'plan' | 'slides' | 'game' | 'resources' | 'visuals';
+
+const MOBILE_SECTIONS: { key: MainTab; label: string; icon: LucideIcon }[] = [
+  { key: 'plan', label: 'Lesson Plan', icon: BookOpen },
+  { key: 'slides', label: 'Slides', icon: MonitorPlay },
+  { key: 'visuals', label: 'Visual Aids', icon: ImageIcon },
+  { key: 'game', label: 'Activity', icon: Gamepad2 },
+  { key: 'resources', label: 'Links', icon: Library },
+];
 type ResourceType = 'worksheet' | 'assignment' | 'test';
 type GenerationError = { code?: string; message?: string };
 const asGenerationError = (e: unknown): GenerationError => e as GenerationError;
@@ -43,6 +51,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   const [assignments, setAssignments] = useState<EducationalResource[]>([]);
   const [tests, setTests] = useState<EducationalResource[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSectionMenuOpen, setIsMobileSectionMenuOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [templateConfig, setTemplateConfig] = useState<TemplateConfig>({ schoolName: '', logo: null, font: 'modern', layout: 'standard' });
@@ -416,7 +425,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   return (
     <div className="flex h-full bg-slate-100 overflow-hidden relative">
       {/* LEFT TOOLBAR */}
-      <aside className={`no-print bg-white border-r border-slate-200 flex flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
+      <aside className={`no-print hidden md:flex bg-white border-r border-slate-200 flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
         <div className="h-16 border-b border-slate-100 flex items-center px-4 gap-3">
           <button onClick={onBack} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><ArrowLeft className="w-5 h-5" /></button>
           {!isSidebarCollapsed && <span className="font-bold text-slate-800 truncate">Workspace</span>}
@@ -472,6 +481,38 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
           </div>
         </div>
       </aside>
+
+      <div className="md:hidden relative border-b border-slate-200 bg-white">
+        <button
+          onClick={() => setIsMobileSectionMenuOpen(prev => !prev)}
+          className="w-full min-h-12 flex items-center justify-between px-4 font-bold text-slate-800"
+        >
+          <span className="flex items-center gap-2">
+            {(() => {
+              const current = MOBILE_SECTIONS.find(s => s.key === activeSection);
+              const Icon = current?.icon ?? BookOpen;
+              return <><Icon className="w-4 h-4" /> {current?.label ?? 'Lesson Plan'}</>;
+            })()}
+          </span>
+          <ChevronDown className={`w-4 h-4 transition-transform ${isMobileSectionMenuOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {isMobileSectionMenuOpen && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setIsMobileSectionMenuOpen(false)} />
+            <div className="absolute left-0 right-0 top-full bg-white border-b border-slate-200 shadow-lg z-30">
+              {MOBILE_SECTIONS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => { setActiveSection(key); setIsMobileSectionMenuOpen(false); }}
+                  className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${activeSection === key ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
+                >
+                  <Icon className="w-4 h-4" /> {label}
+                </button>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {/* MAIN DOCUMENT AREA */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
