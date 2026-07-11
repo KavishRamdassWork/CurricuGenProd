@@ -91,7 +91,8 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
       learningStyles, accommodations, studentInterests,
     };
     try {
-      if (editingClass && onUpdateClass) {
+      if (editingClass) {
+        if (!onUpdateClass) throw new Error('onUpdateClass handler is missing');
         const updated = await onUpdateClass(editingClass.id, classData);
         if (updated) { setIsModalOpen(false); resetForm(); onCloseEdit?.(); }
       } else if (onCreateClass) {
