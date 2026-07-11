@@ -234,21 +234,21 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
                        <button
                           title="Edit Class"
                           onClick={(e) => { e.stopPropagation(); onOpenEditClass?.(cls); }}
-                          className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 transition-all duration-300"
+                          className="min-w-12 min-h-12 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 transition-all duration-300"
                        >
                           <Pencil className="w-4 h-4" />
                        </button>
                        <button
                           title="Class Analytics"
                           onClick={(e) => { e.stopPropagation(); setActiveAnalysisClassId(cls.id); }}
-                          className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 transition-all duration-300"
+                          className="min-w-12 min-h-12 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 transition-all duration-300"
                        >
                           <BarChart2 className="w-4 h-4" />
                        </button>
                        <button
                           title="Delete Class"
                           onClick={(e) => { e.stopPropagation(); setDeleteTargetId(cls.id); }}
-                          className="w-9 h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-600 transition-all duration-300"
+                          className="min-w-12 min-h-12 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-600 transition-all duration-300"
                        >
                           <Trash2 className="w-4 h-4" />
                        </button>
@@ -302,8 +302,8 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
       {/* CREATE CLASS MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white/95 backdrop-blur-xl w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col max-h-[92vh] border border-white">
-            <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center flex-none bg-white">
+          <div className="bg-white/95 backdrop-blur-xl w-full max-w-2xl rounded-2xl sm:rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col max-h-[92vh] border border-white">
+            <div className="px-4 sm:px-8 py-4 sm:py-6 border-b border-slate-100 flex justify-between items-center flex-none bg-white">
               <div>
                  <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">{editingClass ? 'Edit Class Profile' : 'New Class Profile'}</h2>
                  <p className="text-slate-500 text-sm font-medium">Step {wizardStep} of 2</p>
@@ -311,7 +311,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
               <button title="Close Modal" onClick={() => { setIsModalOpen(false); onCloseEdit?.(); }} className="p-2 bg-slate-50 rounded-full hover:bg-slate-200 transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
             </div>
             
-            <form onSubmit={handleCreateClass} className="p-8 overflow-y-auto flex-1 custom-scrollbar">
+            <form onSubmit={handleCreateClass} className="p-4 sm:p-8 overflow-y-auto flex-1 custom-scrollbar">
                {wizardStep === 1 ? (
                   <div className="space-y-6">
                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
@@ -527,7 +527,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
       {/* DELETE CONFIRMATION MODAL */}
       {deleteTarget && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-[2rem] shadow-2xl p-8 animate-in fade-in zoom-in-95 duration-300 border border-white">
+          <div className="bg-white w-full max-w-md rounded-2xl sm:rounded-[2rem] shadow-2xl p-4 sm:p-8 animate-in fade-in zoom-in-95 duration-300 border border-white">
             <h2 className="text-xl font-extrabold text-slate-900 mb-1">Delete Class</h2>
             <p className="text-slate-500 text-sm mb-6">This action cannot be undone.</p>
 
