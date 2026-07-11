@@ -7,7 +7,7 @@ async function main() {
     const response = await ai.models.list();
     console.log('Available models:');
     for await (const model of response) {
-      if (model.name.includes('image') || model.name.includes('vision') || model.name.includes('generate')) {
+      if (model.name.includes('gemini') && !model.name.includes('image') && !model.name.includes('vision')) {
         console.log(model.name);
       }
     }

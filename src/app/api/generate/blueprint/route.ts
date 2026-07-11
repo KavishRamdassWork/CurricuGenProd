@@ -12,6 +12,9 @@ const classroomSchema = z.object({
   studentCount: z.number().int().min(1).max(500),
   averagePercentile: z.number().min(0).max(100),
   teachingNotes: z.string().max(1000).default(''),
+  learningStyles: z.array(z.string()).optional(),
+  accommodations: z.string().nullable().optional(),
+  studentInterests: z.string().nullable().optional(),
   students: z.array(z.any()).default([]),
   assessmentColumns: z.array(z.string()).default([]),
 });

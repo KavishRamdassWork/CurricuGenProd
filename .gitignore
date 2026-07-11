@@ -41,3 +41,9 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# clerk configuration (can include secrets)
+/.clerk/
+
+# manual debug scripts (not part of build or test suite)
+/debug-scripts/*.log

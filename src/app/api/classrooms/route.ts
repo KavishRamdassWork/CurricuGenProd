@@ -28,7 +28,7 @@ export async function POST(req: NextRequest) {
     if (!dbUser) return NextResponse.json({ error: 'User not found' }, { status: 404 });
 
     const body = await req.json();
-    const { name, subject, grade, curriculum, studentCount, averagePercentile, teachingNotes } = body;
+    const { name, subject, grade, curriculum, studentCount, averagePercentile, teachingNotes, learningStyles, accommodations, studentInterests } = body;
 
     const classroom = await prisma.classroom.create({
       data: {
@@ -40,6 +40,9 @@ export async function POST(req: NextRequest) {
         studentCount: Number(studentCount) || 30,
         averagePercentile: Number(averagePercentile) || 65,
         teachingNotes: teachingNotes || '',
+        learningStyles: Array.isArray(learningStyles) ? learningStyles : [],
+        accommodations: accommodations || null,
+        studentInterests: studentInterests || null,
         students: [],
         assessmentColumns: [],
       },

@@ -5,7 +5,7 @@ import { Classroom, Student, ClassAnalysis } from '@/lib/types';
 import { CURRICULUMS, GRADES, SUBJECTS_COMMON } from '@/lib/constants';
 import { generateMarksTemplate, parseMarksTemplate } from '@/lib/excelHelper';
 import { analyzeClassPerformance } from '@/lib/gemini';
-import { Users, Plus, ArrowRight, X, BarChart2, Download, Upload, AlertTriangle, TrendingUp, Sparkles, PieChart, Loader2, BrainCircuit, Heart, Fingerprint, BookOpen } from 'lucide-react';
+import { Users, Plus, ArrowRight, X, BarChart2, Download, Upload, AlertTriangle, TrendingUp, Sparkles, PieChart, Loader2, BrainCircuit, Heart, Fingerprint, BookOpen, HelpCircle } from 'lucide-react';
 
 interface ClassManagerProps {
   classes: Classroom[];
@@ -22,6 +22,8 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
   const [activeAnalysisClassId, setActiveAnalysisClassId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [wizardStep, setWizardStep] = useState(1);
+  const [stepChangeTime, setStepChangeTime] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Form State
@@ -44,6 +46,19 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
 
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (wizardStep === 1) {
+      if (name && subject && grade) {
+        setWizardStep(2);
+        setStepChangeTime(Date.now());
+      }
+      return;
+    }
+    
+    // Prevent accidental double-clicks or Enter key repeats from immediately submitting
+    if (Date.now() - stepChangeTime < 500) {
+      return;
+    }
+
     setIsCreating(true);
     const classData = {
       name, subject, grade, curriculum, studentCount,
@@ -78,6 +93,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
     setLearningStyles([]);
     setAccommodations('');
     setStudentInterests('');
+    setWizardStep(1);
   };
 
   const handleDownloadTemplate = () => {
@@ -168,7 +184,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
             {classes.map(cls => (
               <div 
                 key={cls.id} 
-                className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white shadow-xl shadow-slate-200/40 hover:shadow-2xl hover:shadow-blue-900/10 hover:-translate-y-2 transition-all duration-500 flex flex-col overflow-hidden group relative"
+                className="bg-white rounded-3xl border border-slate-200/60 shadow-lg shadow-slate-200/60 hover:shadow-2xl hover:shadow-slate-300/60 hover:border-slate-300/80 hover:-translate-y-1 transition-all duration-500 flex flex-col overflow-hidden group relative"
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-bl-full -z-10 group-hover:scale-150 transition-transform duration-700" />
                 
@@ -232,58 +248,58 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
       {/* CREATE CLASS MODAL */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-md z-[100] flex items-center justify-center p-4">
-          <div className="bg-white/95 backdrop-blur-xl w-full max-w-4xl rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col max-h-[92vh] border border-white">
+          <div className="bg-white/95 backdrop-blur-xl w-full max-w-2xl rounded-[2rem] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300 flex flex-col max-h-[92vh] border border-white">
             <div className="px-8 py-6 border-b border-slate-100 flex justify-between items-center flex-none bg-white">
-              <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">New Class Profile</h2>
+              <div>
+                 <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">New Class Profile</h2>
+                 <p className="text-slate-500 text-sm font-medium">Step {wizardStep} of 2</p>
+              </div>
               <button title="Close Modal" onClick={() => setIsModalOpen(false)} className="p-2 bg-slate-50 rounded-full hover:bg-slate-200 transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
             </div>
             
             <form onSubmit={handleCreateClass} className="p-8 overflow-y-auto flex-1 custom-scrollbar">
-               <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                  
-                  {/* Column 1: Core Details */}
-                  <div className="lg:col-span-5 space-y-6">
+               {wizardStep === 1 ? (
+                  <div className="space-y-6">
                      <div className="flex items-center gap-2 mb-2 pb-2 border-b border-slate-100">
                         <BookOpen className="w-5 h-5 text-blue-600" />
                         <h3 className="font-bold text-slate-800">Core Details</h3>
                      </div>
                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Class Name</label>
-                        <input required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Grade 5 - Hawks Group" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-medium text-slate-800 placeholder-slate-400" />
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Class Name</label>
+                        <input required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Grade 5 - Hawks Group" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all font-medium text-sm text-slate-800 placeholder-slate-400/80" />
                      </div>
                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Subject</label>
-                           <input required list="subjects" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Select Subject" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-slate-800 font-medium" />
+                           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Subject</label>
+                           <input required list="subjects" value={subject} onChange={e => setSubject(e.target.value)} placeholder="Select Subject" className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm text-slate-800 font-medium placeholder-slate-400/80" />
                            <datalist id="subjects">{SUBJECTS_COMMON.map(s => <option key={s} value={s} />)}</datalist>
                         </div>
                         <div>
-                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Grade</label>
-                           <select required value={grade} onChange={e => setGrade(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none text-slate-800 font-medium">
+                           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Grade</label>
+                           <select required value={grade} onChange={e => setGrade(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none text-sm text-slate-800 font-medium">
                            {GRADES.map(g => <option key={g} value={g}>{g}</option>)}
                            </select>
                         </div>
                      </div>
                      <div className="grid grid-cols-2 gap-4">
                         <div>
-                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Student Count</label>
-                           <input type="number" min="1" required value={studentCount} onChange={e => setStudentCount(Number(e.target.value))} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-slate-800 font-medium" />
+                           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Student Count</label>
+                           <input type="number" min="1" required value={studentCount} onChange={e => setStudentCount(Number(e.target.value))} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm text-slate-800 font-medium" />
                         </div>
                         <div>
-                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Avg. Performance (%)</label>
-                           <input type="number" min="0" max="100" required value={percentile} onChange={e => setPercentile(Number(e.target.value))} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-slate-800 font-medium" />
+                           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block flex items-center gap-1.5" title="Average performance helps the AI adjust the baseline difficulty of materials."><HelpCircle className="w-3 h-3"/> Avg. Performance (%)</label>
+                           <input type="number" min="0" max="100" required value={percentile} onChange={e => setPercentile(Number(e.target.value))} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all text-sm text-slate-800 font-medium" />
                         </div>
                      </div>
                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">Curriculum Standard</label>
-                        <select required value={curriculum} onChange={e => setCurriculum(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none text-slate-800 font-medium">
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block">Curriculum Standard</label>
+                        <select required value={curriculum} onChange={e => setCurriculum(e.target.value)} className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all appearance-none text-sm text-slate-800 font-medium">
                            {CURRICULUMS.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                      </div>
                   </div>
-
-                  {/* Column 2: Advanced AI Inputs */}
-                  <div className="lg:col-span-7 space-y-6">
+               ) : (
+                  <div className="space-y-6">
                      <div className="flex items-center justify-between mb-2 pb-2 border-b border-slate-100">
                         <div className="flex items-center gap-2">
                            <BrainCircuit className="w-5 h-5 text-indigo-500" />
@@ -293,8 +309,8 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
                      </div>
                      
                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block flex items-center gap-2">
-                           <Fingerprint className="w-3 h-3" /> Dominant Learning Styles (Optional)
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block flex items-center gap-2" title="Helps the AI generate targeted multi-modal content (e.g., visual diagrams, hands-on activities).">
+                           <Fingerprint className="w-3 h-3" /> Dominant Learning Styles (Optional) <HelpCircle className="w-3 h-3 text-slate-300"/>
                         </label>
                         <div className="flex flex-wrap gap-2">
                            {LEARNING_STYLES.map(style => (
@@ -316,33 +332,43 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
 
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block flex items-center gap-2">
-                              <Heart className="w-3 h-3" /> Accommodations / IEPs
+                           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block flex items-center gap-2" title="The AI will adapt formatting, vocabulary, and structure to meet these needs.">
+                              <Heart className="w-3 h-3" /> Accommodations / IEPs <HelpCircle className="w-3 h-3 text-slate-300"/>
                            </label>
-                           <textarea value={accommodations} onChange={e => setAccommodations(e.target.value)} placeholder="e.g. Dyslexia friendly fonts, extra time, ADHD short tasks..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-24 resize-none text-sm text-slate-700" />
+                           <textarea value={accommodations} onChange={e => setAccommodations(e.target.value)} placeholder="e.g. Dyslexia friendly fonts, extra time..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-24 resize-none text-sm text-slate-800 placeholder-slate-400/80" />
                         </div>
                         <div>
-                           <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block flex items-center gap-2">
-                              <Sparkles className="w-3 h-3" /> Student Interests
+                           <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block flex items-center gap-2" title="The AI will use these interests to create engaging word problems and examples.">
+                              <Sparkles className="w-3 h-3" /> Student Interests <HelpCircle className="w-3 h-3 text-slate-300"/>
                            </label>
-                           <textarea value={studentInterests} onChange={e => setStudentInterests(e.target.value)} placeholder="e.g. Minecraft, Space explorer, Sports. AI will weave this into word problems." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-24 resize-none text-sm text-slate-700" />
+                           <textarea value={studentInterests} onChange={e => setStudentInterests(e.target.value)} placeholder="e.g. Minecraft, Space explorer, Sports..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-24 resize-none text-sm text-slate-800 placeholder-slate-400/80" />
                         </div>
                      </div>
 
                      <div>
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 block">General Teaching Context</label>
-                        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any other context? E.g. Class struggles with reading comprehension..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-16 resize-none text-sm text-slate-700" />
+                        <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 block flex items-center gap-1.5" title="Any context you think is important for the AI to know about this class."><HelpCircle className="w-3 h-3"/> General Teaching Context</label>
+                        <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any other context? E.g. Class struggles with reading comprehension..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none transition-all h-16 resize-none text-sm text-slate-800 placeholder-slate-400/80" />
                      </div>
                   </div>
-
-               </div>
+               )}
 
                {/* Footer */}
                <div className="mt-10 pt-6 border-t border-slate-100 flex gap-4 justify-end">
-                 <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Cancel</button>
-                 <button type="submit" disabled={isCreating} className="px-10 py-4 rounded-full bg-slate-900 text-white font-extrabold shadow-xl shadow-slate-900/20 hover:bg-slate-800 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
-                    {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />} Create Workspace <ArrowRight className="w-5 h-5" />
-                 </button>
+                 {wizardStep === 1 ? (
+                    <>
+                       <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Cancel</button>
+                       <button type="button" onClick={() => { setWizardStep(2); setStepChangeTime(Date.now()); }} disabled={!name || !subject || !grade} className="px-10 py-4 rounded-full bg-blue-600 text-white font-extrabold shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
+                          Next Step <ArrowRight className="w-5 h-5" />
+                       </button>
+                    </>
+                 ) : (
+                    <>
+                       <button type="button" onClick={() => setWizardStep(1)} className="px-8 py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Back</button>
+                       <button type="submit" disabled={isCreating} className="px-10 py-4 rounded-full bg-slate-900 text-white font-extrabold shadow-xl shadow-slate-900/20 hover:bg-slate-800 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
+                          {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />} Create Workspace <ArrowRight className="w-5 h-5" />
+                       </button>
+                    </>
+                 )}
                </div>
             </form>
           </div>
