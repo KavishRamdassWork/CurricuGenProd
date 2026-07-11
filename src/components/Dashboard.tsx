@@ -25,6 +25,7 @@ const Dashboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isDbLoading, setIsDbLoading] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
   const [editingClass, setEditingClass] = useState<Classroom | null>(null);
 
@@ -257,8 +258,25 @@ const Dashboard = () => {
 
   return (
     <div className="h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden flex">
+      {/* Mobile top bar */}
+      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-slate-900 flex items-center px-4 z-40 shadow-lg">
+        <button
+          onClick={() => setIsMobileNavOpen(true)}
+          className="min-w-12 min-h-12 flex items-center justify-center text-white -ml-2"
+          aria-label="Open navigation menu"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+        <div className="flex items-center gap-2 ml-2">
+          <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white">
+            <Sparkles className="w-4 h-4" />
+          </div>
+          <span className="font-bold text-white text-base tracking-tight">CurricuGen</span>
+        </div>
+      </div>
+
       {/* Sidebar */}
-      <aside className={`${isSidebarCollapsed ? 'w-20' : 'w-64'} bg-slate-900 text-slate-300 flex flex-col transition-all duration-300 ease-in-out z-50 shadow-2xl flex-none`}>
+      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 ${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'} bg-slate-900 text-slate-300 flex flex-col transition-transform md:transition-all duration-300 ease-in-out shadow-2xl flex-none ${isMobileNavOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
         <div className="h-16 flex items-center px-5 border-b border-slate-800">
           <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center w-full' : ''}`}>
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white flex-shrink-0">
@@ -269,7 +287,7 @@ const Dashboard = () => {
         </div>
 
         <div className="flex-1 py-6 px-3 space-y-2">
-          <NavItem icon={Users} label="My Classes" isActive={appState === AppState.CLASS_LIST} onClick={handleBackToClasses} collapsed={isSidebarCollapsed} />
+          <NavItem icon={Users} label="My Classes" isActive={appState === AppState.CLASS_LIST} onClick={() => { handleBackToClasses(); setIsMobileNavOpen(false); }} collapsed={isSidebarCollapsed} />
           {activeClass && (
             <>
               <div className="my-4 border-t border-slate-800 mx-3" />
@@ -280,7 +298,7 @@ const Dashboard = () => {
                   <div className="text-xs text-slate-400">{activeClass.grade} • {activeClass.subject}</div>
                 </div>
               )}
-              <NavItem icon={LayoutDashboard} label="Curriculum" isActive={appState === AppState.DASHBOARD || appState === AppState.LESSON_VIEW} onClick={() => setAppState(AppState.DASHBOARD)} collapsed={isSidebarCollapsed} />
+              <NavItem icon={LayoutDashboard} label="Curriculum" isActive={appState === AppState.DASHBOARD || appState === AppState.LESSON_VIEW} onClick={() => { setAppState(AppState.DASHBOARD); setIsMobileNavOpen(false); }} collapsed={isSidebarCollapsed} />
             </>
           )}
         </div>
@@ -312,8 +330,16 @@ const Dashboard = () => {
         </div>
       </aside>
 
+      {/* Mobile nav backdrop */}
+      {isMobileNavOpen && (
+        <div
+          className="md:hidden fixed inset-0 bg-black/40 z-40"
+          onClick={() => setIsMobileNavOpen(false)}
+        />
+      )}
+
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50 pt-14 md:pt-0">
         <div className="flex-1 overflow-hidden relative">
           {appState === AppState.CLASS_LIST && (
             <ClassManager
