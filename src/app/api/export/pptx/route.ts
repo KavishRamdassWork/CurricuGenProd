@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@clerk/nextjs/server';
 import PptxGenJS from 'pptxgenjs';
 import { parseSlideMarkdown } from '@/lib/slideParser';
+import buildRateLimit from '@/lib/rateLimit';
+
+const exportLimiter = buildRateLimit({ uniqueTokenPerInterval: 500, interval: 60000 });
 
 interface ExportPptxBody {
   slidesMarkdown: string;
@@ -26,6 +29,13 @@ export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  try {
+    // 20 exports per minute per user
+    await exportLimiter.check(20, userId);
+  } catch {
+    return NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 });
   }
 
   let body: ExportPptxBody;
