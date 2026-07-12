@@ -19,7 +19,7 @@ test.describe('AI Generation Quotas & Security', () => {
     });
 
     // We expect the auth guard to fail and return 401 Unauthorized
-    expect(response.status()).toBe(404);
+    expect(response.status()).toBe(401);
   });
 
   test('should block unauthorized access to game generation', async ({ request }) => {
@@ -30,6 +30,6 @@ test.describe('AI Generation Quotas & Security', () => {
       }
     });
 
-    expect(response.status()).toBe(404);
+    expect(response.status()).toBe(401);
   });
 });

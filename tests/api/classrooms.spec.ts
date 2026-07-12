@@ -6,7 +6,7 @@ test.describe('Classroom Management API (CRUD)', () => {
 
   test('GET /api/classrooms should reject unauthenticated requests', async ({ request }) => {
     const response = await request.get('/api/classrooms');
-    expect(response.status()).toBe(404);
+    expect(response.status()).toBe(401);
   });
 
   test('POST /api/classrooms should reject missing auth', async ({ request }) => {
@@ -20,7 +20,7 @@ test.describe('Classroom Management API (CRUD)', () => {
         averagePercentile: 50
       }
     });
-    expect(response.status()).toBe(404);
+    expect(response.status()).toBe(401);
   });
 
   test('PATCH /api/classrooms/[id] should protect against mass assignment (IDOR setup)', async ({ request }) => {
@@ -35,11 +35,11 @@ test.describe('Classroom Management API (CRUD)', () => {
     });
 
     // Should block unconditionally if no auth token is provided
-    expect(response.status()).toBe(404);
+    expect(response.status()).toBe(401);
   });
 
   test('DELETE /api/classrooms/[id] should require auth', async ({ request }) => {
     const response = await request.delete('/api/classrooms/mock_id_123');
-    expect(response.status()).toBe(404);
+    expect(response.status()).toBe(401);
   });
 });
