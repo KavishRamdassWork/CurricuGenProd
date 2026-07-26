@@ -1010,7 +1010,7 @@ const RenderMarkdown = ({
         table: ({ node: _node, ...props }) => (
           <div className="overflow-x-auto my-6">
             <table
-              className="min-w-full text-sm divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden"
+              className="min-w-full text-xs md:text-sm divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden"
               {...props}
             />
           </div>
@@ -1018,12 +1018,12 @@ const RenderMarkdown = ({
         thead: ({ node: _node, ...props }) => <thead className="bg-slate-50" {...props} />,
         th: ({ node: _node, ...props }) => (
           <th
-            className="px-4 py-3 text-left font-bold text-slate-700 uppercase tracking-wider"
+            className="px-2 py-2 md:px-4 md:py-3 text-left font-bold text-slate-700 uppercase tracking-wider"
             {...props}
           />
         ),
         td: ({ node: _node, ...props }) => (
-          <td className="px-4 py-3 border-t border-slate-200" {...props} />
+          <td className="px-2 py-2 md:px-4 md:py-3 border-t border-slate-200" {...props} />
         ),
       }}
     >
