@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { refineContentServer } from '@/lib/aiService';
 import { requireGenerationAccess } from '@/lib/authGuard';
 import { handleGenerationError } from '@/lib/generationErrors';
-import { auditPromptInputs } from '@/lib/promptSafety';
+import { AUDITED_CONTENT_CHARS, auditPromptInputs } from '@/lib/promptSafety';
 import { z } from 'zod';
 import { uploadedFileSchema } from '@/lib/requestSchemas';
 
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
   if (!guard.ok) return guard.response;
   try {
     const { currentContent, instruction, contextType, file } = schema.parse(await req.json());
-    auditPromptInputs('refine', guard.dbUser.id, [instruction]);
+    auditPromptInputs('refine', guard.dbUser.id, [instruction, currentContent.slice(0, AUDITED_CONTENT_CHARS)]);
     const content = await refineContentServer(currentContent, instruction, contextType, file);
     return NextResponse.json({ content });
   } catch (error: unknown) {

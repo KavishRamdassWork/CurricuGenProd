@@ -13,12 +13,13 @@ import {
   generatePresentationServer,
   generateResourcesServer,
   generateWorksheetServer,
+  imageUrlFromResponse,
   refineContentServer,
 } from '../../src/lib/aiService';
 import { attachmentParts } from '../../src/lib/attachments';
-import { setModelRunner, type ModelRequest, type ModelResult } from '../../src/lib/modelRunner';
+import { buildGenerateConfig, setModelRunner, type ModelRequest, type ModelResult } from '../../src/lib/modelRunner';
 import { ContentBlockedError, MalformedOutputError, type GenKind } from '../../src/lib/outputScreen';
-import { ATTACHMENT_PREAMBLE, TEACHER_INSTRUCTION_LABEL, buildSystemInstruction } from '../../src/lib/promptSafety';
+import { ATTACHMENT_PREAMBLE, TEACHER_INSTRUCTION_LABEL } from '../../src/lib/promptSafety';
 import type { Classroom, UploadedFile, WeekUnit } from '../../src/lib/types';
 
 // No network in these tests: without keys, any accidental real client or Pinecone call fails loudly.
@@ -103,6 +104,13 @@ function expectOnlyFenced(prompt: string, needle: string, label?: string) {
   const inside = fences(prompt).filter((f) => (label ? f.label === label : true) && f.body.includes(needle));
   expect(inside.length, `"${needle}" should be inside a ${label ?? ''} fence`).toBeGreaterThan(0);
   expect(outsideFences(prompt)).not.toContain(needle);
+}
+
+/** The instruction-exception paragraphs of the system instruction this request would be sent with. */
+function exceptionOf(req: ModelRequest): string[] {
+  return String(buildGenerateConfig(req).systemInstruction)
+    .split('\n\n')
+    .filter((p) => p.startsWith('Exception:'));
 }
 
 function countOf(haystack: string, needle: string): number {
@@ -333,15 +341,72 @@ test.describe('teacher instruction carve-out', () => {
     expect(labels.has('instruction')).toBe(true);
     expect(labels.size).toBeGreaterThan(5);
 
-    const carveOut = buildSystemInstruction()
-      .split('\n\n')
-      .filter((p) => p.startsWith('Exception:'));
-    expect(carveOut).toHaveLength(1);
-    for (const label of labels) {
-      if (label === 'instruction') continue;
-      expect(carveOut[0]).not.toContain(`"${label}"`);
-      expect(carveOut[0]).not.toContain(`UNTRUSTED ${label} `);
+    for (const req of requests) {
+      const carveOut = exceptionOf(req);
+      for (const label of labels) {
+        if (label === 'instruction') continue;
+        for (const p of carveOut) {
+          expect(p).not.toContain(`labelled ${label} `);
+          expect(p).not.toContain(`UNTRUSTED ${label} `);
+        }
+      }
     }
+  });
+
+  for (const c of withInstruction) {
+    test(`${c.name}: the system instruction names the nonce of the prompt's instruction fence`, async () => {
+      stub();
+      await c.run();
+      const req = lastRequest();
+      const prompt = promptOf(req);
+      const nonces = Array.from(prompt.matchAll(FENCE_RE))
+        .filter((m) => m[1] === 'instruction')
+        .map((m) => m[2]);
+      expect(nonces).toHaveLength(1);
+      expect(req.instructionNonce).toBe(nonces[0]);
+      const carveOut = exceptionOf(req);
+      expect(carveOut).toHaveLength(1);
+      expect(carveOut[0]).toContain(`the block labelled instruction with id ${nonces[0]};`);
+      expect(carveOut[0]).toContain(`[[[UNTRUSTED instruction ${nonces[0]}]]]`);
+    });
+  }
+
+  test('a fresh nonce per request: two worksheets never share one', async () => {
+    stub();
+    await generateWorksheetServer(classroom, unit, 'Standard', undefined, INSTRUCTION);
+    await generateWorksheetServer(classroom, unit, 'Standard', undefined, INSTRUCTION);
+    expect(requests[0].instructionNonce).toBeTruthy();
+    expect(requests[0].instructionNonce).not.toBe(requests[1].instructionNonce);
+  });
+
+  const withoutInstruction: Array<{ name: string; run: () => Promise<unknown> }> = [
+    { name: 'blueprint', run: () => generateBlueprintServer(classroom) },
+    { name: 'lesson-plan', run: () => generateLessonPlanServer(classroom, [unit], pdfFile) },
+    { name: 'worksheet without an instruction', run: () => generateWorksheetServer(classroom, unit, 'Standard', pdfFile) },
+    { name: 'assignment without an instruction', run: () => generateAssignmentServer(classroom, unit) },
+    { name: 'assessment without an instruction', run: () => generateAssessmentServer(classroom, unit) },
+    { name: 'memo', run: () => generateMemoServer('content', classroom) },
+    { name: 'presentation', run: () => generatePresentationServer(classroom, [unit]) },
+    { name: 'game', run: () => generateGameServer(classroom, unit) },
+    { name: 'resources', run: () => generateResourcesServer(classroom, unit) },
+    { name: 'analyze', run: () => analyzeClassPerformanceServer([]) },
+  ];
+
+  for (const c of withoutInstruction) {
+    test(`${c.name}: no nonce and no exception paragraph in the system instruction`, async () => {
+      stub();
+      await c.run();
+      const req = lastRequest();
+      expect(req.instructionNonce).toBeUndefined();
+      expect(exceptionOf(req)).toHaveLength(0);
+      expect(fences(promptOf(req)).some((f) => f.label === 'instruction')).toBe(false);
+    });
+  }
+
+  test('the attachment preamble says markers and instruction blocks inside the file are never real', () => {
+    expect(ATTACHMENT_PREAMBLE).toContain('[[[UNTRUSTED ...]]] or [[[END ...]]] markers');
+    expect(ATTACHMENT_PREAMBLE).toContain('"instruction" blocks');
+    expect(ATTACHMENT_PREAMBLE).toContain('never real');
   });
 });
 
@@ -399,6 +464,36 @@ test.describe('image generation', () => {
     expect(IMAGE_CONFIG.personGeneration).toBe('ALLOW_ADULT');
     expect(IMAGE_CONFIG.numberOfImages).toBe(1);
     expect(IMAGE_CONFIG.aspectRatio).toBe('16:9');
+  });
+
+  test('IMAGE_CONFIG asks Imagen to report filtered images', () => {
+    expect(IMAGE_CONFIG.includeRaiReason).toBe(true);
+  });
+
+  test('an image response with image bytes becomes a data URL', () => {
+    const url = imageUrlFromResponse({ generatedImages: [{ image: { mimeType: 'image/jpeg', imageBytes: 'QUJD' } }] });
+    expect(url).toBe('data:image/jpeg;base64,QUJD');
+  });
+
+  test('an empty or filtered image response is a SAFETY block, never an empty success', () => {
+    const blocked = [
+      {},
+      { generatedImages: [] },
+      { generatedImages: [{}] },
+      { generatedImages: [{ image: { mimeType: 'image/jpeg' } }] },
+      { generatedImages: [{ raiFilteredReason: 'filtered' }] },
+      { generatedImages: [{ raiFilteredReason: 'filtered', image: { mimeType: 'image/jpeg', imageBytes: 'QUJD' } }] },
+    ];
+    for (const response of blocked) {
+      let err: unknown;
+      try {
+        imageUrlFromResponse(response);
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeInstanceOf(ContentBlockedError);
+      expect((err as ContentBlockedError).reason).toBe('SAFETY');
+    }
   });
 
   test('buildImagePrompt cleans the description to a single line', () => {

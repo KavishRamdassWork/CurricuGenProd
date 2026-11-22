@@ -26,12 +26,12 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { unit, description } = schema.parse(body);
     auditPromptInputs('image', guard.dbUser.id, [description]);
+    // Never empty: a response with no image (filtered by Imagen) throws ContentBlockedError below.
     const imageUrl = await generateEducationalImageServer(unit, description);
-    // Gemini can answer with no image (e.g. filtered); don't charge the credit for that.
-    if (!imageUrl) await refundImage(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ imageUrl });
   } catch (error: unknown) {
-    // A safety block keeps the credit (the request was the problem); anything else gives it back.
+    // A safety block, including an empty/filtered Imagen response, keeps the credit (the request was
+    // the problem); anything else gives it back.
     if (error instanceof ContentBlockedError) {
       console.warn(JSON.stringify({ event: 'content_blocked', route: 'image', userId: guard.dbUser.id, reason: error.reason }));
       return NextResponse.json(

@@ -1,9 +1,15 @@
-import { Type, PersonGeneration, SafetyFilterLevel, type GenerateImagesConfig } from "@google/genai";
+import {
+  Type,
+  PersonGeneration,
+  SafetyFilterLevel,
+  type GenerateImagesConfig,
+  type GenerateImagesResponse,
+} from "@google/genai";
 import { Blueprint, WeekUnit, UploadedFile, Student, ClassAnalysis, Classroom } from "@/lib/types";
 import { Pinecone } from '@pinecone-database/pinecone';
 import { getPhaseForGrade } from './curriculumHelper';
 import { generateText, getAIClient } from '@/lib/modelRunner';
-import { TEACHER_INSTRUCTION_LABEL, cleanText, fence } from '@/lib/promptSafety';
+import { TEACHER_INSTRUCTION_LABEL, cleanText, fence, fenceWithNonce } from '@/lib/promptSafety';
 import { ContentBlockedError, MalformedOutputError } from '@/lib/outputScreen';
 import { attachmentParts } from '@/lib/attachments';
 
@@ -28,8 +34,9 @@ const EMBEDDING_MODEL  = 'text-embedding-004';      // stable, no announced depr
 const IMAGE_MODEL      = 'imagen-4-fast-generate-001'; // upgraded from imagen-3, $0.02/image
 
 // Thinking budget: Gemini 3.5 Flash supports thinking tokens (billed as output tokens).
-// Enabled only for high-accuracy tasks (blueprint, formal assessment) where quality
-// matters more than the small extra cost (~$0.018 per call at $9/1M output).
+// Every kind gets an explicit budget (THINKING_BUDGET in modelRunner.ts, 1024 by default); blueprint
+// and formal assessment ask for this higher one, where quality matters more than the small extra
+// cost (~$0.018 per call at $9/1M output).
 const THINKING_BUDGET_HIGH = 2048;
 
 /** Default cap for short single-line fields (names, titles, grade, subject). */
@@ -46,10 +53,18 @@ const learningStylesOf = (classroom: Classroom) =>
 
 /**
  * The teacher's own instruction for this generation. It is fenced under the one label the system
- * instruction lets the model follow (within its rules); every other fenced block is data only.
+ * instruction lets the model follow (within its rules), and the fence's nonce is returned so the
+ * request can name this exact block in the system instruction; every other block is data only.
+ * No instruction gives no block and no nonce, so the system instruction has no exception at all.
  */
-const teacherInstructionBlock = (instruction: string) =>
-  `IMPORTANT TEACHER INSTRUCTION (the teacher's own request; follow it within the required output format below):\n${fence(TEACHER_INSTRUCTION_LABEL, instruction, 300)}`;
+function teacherInstructionBlock(instruction?: string): { text: string; nonce?: string } {
+  if (!instruction) return { text: '' };
+  const { block, nonce } = fenceWithNonce(TEACHER_INSTRUCTION_LABEL, instruction, 300);
+  return {
+    text: `IMPORTANT TEACHER INSTRUCTION (the teacher's own request; follow it within the required output format below):\n${block}`,
+    nonce,
+  };
+}
 
 /** Parse JSON model output into a plain object, or throw MalformedOutputError. */
 function parseModelJson(text: string): Record<string, unknown> {
@@ -224,6 +239,7 @@ ${fence('teacher-notes', classroom.teachingNotes, 500)}
 }
 
 export async function generateWorksheetServer(classroom: Classroom, unit: WeekUnit, type: string = "Standard", file?: UploadedFile, userInstruction?: string): Promise<string> {
+  const teacher = teacherInstructionBlock(userInstruction);
   const basePrompt = `
     Create a ${line(type).toUpperCase()} STUDENT WORKSHEET for:
     Class: ${line(classroom.name)} (${line(classroom.grade)} ${line(classroom.subject)})
@@ -232,7 +248,7 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
     Class Average: ${Number(classroom.averagePercentile) || 0}% — adjust difficulty accordingly.
     ${classroom.accommodations ? `Accommodations (apply throughout):\n${fence('accommodations', classroom.accommodations, 300)}` : ""}
     ${classroom.studentInterests ? `Incorporate these interests in examples where possible:\n${fence('student-interests', classroom.studentInterests, 300)}` : ""}
-    ${userInstruction ? teacherInstructionBlock(userInstruction) : ""}
+    ${teacher.text}
     ${file ? "Reference the attached document for question styles, terminology, and worked examples." : ""}
 
     OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order. Do not include answers.
@@ -252,11 +268,17 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
     [Critical thinking and extension questions. Each question worth 5+ marks.]
   `;
 
-  return generateText({ kind: 'worksheet', parts: attachmentParts(basePrompt, file), temperature: 0.4 });
+  return generateText({
+    kind: 'worksheet',
+    parts: attachmentParts(basePrompt, file),
+    temperature: 0.4,
+    instructionNonce: teacher.nonce,
+  });
 }
 
 export async function generateAssignmentServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile, userInstruction?: string): Promise<string> {
   const styles = learningStylesOf(classroom);
+  const teacher = teacherInstructionBlock(userInstruction);
   const basePrompt = `
     Create a HOMEWORK ASSIGNMENT for:
     Class: ${line(classroom.name)} (${line(classroom.grade)} ${line(classroom.subject)})
@@ -269,7 +291,7 @@ ${fence('teacher-notes', classroom.teachingNotes, 300)}
     ${classroom.accommodations ? `Accommodations:\n${fence('accommodations', classroom.accommodations, 300)}` : ""}
     ${styles ? `Learning Styles:\n${fence('learning-styles', styles, 200)}` : ""}
     ${classroom.studentInterests ? `Student Interests:\n${fence('student-interests', classroom.studentInterests, 300)}` : ""}
-    ${userInstruction ? teacherInstructionBlock(userInstruction) : ""}
+    ${teacher.text}
 
     OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order.
 
@@ -288,7 +310,12 @@ ${fence('teacher-notes', classroom.teachingNotes, 300)}
     [A table with: Criteria | Excellent | Satisfactory | Needs Improvement | Marks. Cover the key learning outcome.]
   `;
 
-  return generateText({ kind: 'assignment', parts: attachmentParts(basePrompt, file), temperature: 0.5 });
+  return generateText({
+    kind: 'assignment',
+    parts: attachmentParts(basePrompt, file),
+    temperature: 0.5,
+    instructionNonce: teacher.nonce,
+  });
 }
 
 export async function generateAssessmentServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile, userInstruction?: string, scopeUnits?: WeekUnit[]): Promise<string> {
@@ -299,6 +326,7 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
       .join('\n');
   }
 
+  const teacher = teacherInstructionBlock(userInstruction);
   const basePrompt = `
     Create a FORMAL TEST / ASSESSMENT for:
     Class: ${line(classroom.name)} (${line(classroom.grade)} ${line(classroom.subject)})
@@ -308,7 +336,7 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
 
     Class Average: ${Number(classroom.averagePercentile) || 0}% — ensure an appropriate difficulty curve across sections.
     ${classroom.accommodations ? `MUST INCLUDE accommodations for:\n${fence('accommodations', classroom.accommodations, 300)}` : ""}
-    ${userInstruction ? teacherInstructionBlock(userInstruction) : ""}
+    ${teacher.text}
     ${file ? "Reference the attached document for question style and terminology." : ""}
 
     OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order. Do not include answers.
@@ -333,6 +361,7 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
     parts: attachmentParts(basePrompt, file),
     temperature: 0.3,
     thinkingBudget: THINKING_BUDGET_HIGH,
+    instructionNonce: teacher.nonce,
   });
 }
 
@@ -464,11 +493,12 @@ export async function generateResourcesServer(classroom: Classroom, unit: WeekUn
 }
 
 export async function refineContentServer(currentContent: string, instruction: string, contextType: string, file?: UploadedFile): Promise<string> {
+  const teacher = fenceWithNonce(TEACHER_INSTRUCTION_LABEL, instruction, 300);
   const basePrompt = `
     You are an expert educational editor refining teacher-generated content.
 
     TEACHER INSTRUCTION (the teacher's own request for this edit; follow it within the CRITICAL RULES below):
-${fence(TEACHER_INSTRUCTION_LABEL, instruction, 300)}
+${teacher.block}
     ${file ? "A reference document has been attached. Use it to inform your edits." : ""}
 
     CURRENT CONTENT:
@@ -482,7 +512,12 @@ ${fence('current-content', currentContent, 30000)}
     3. Return ONLY the updated Markdown. No explanation, no preamble, no commentary.
   `;
 
-  return generateText({ kind: 'refine', parts: attachmentParts(basePrompt, file), temperature: 0.3 });
+  return generateText({
+    kind: 'refine',
+    parts: attachmentParts(basePrompt, file),
+    temperature: 0.3,
+    instructionNonce: teacher.nonce,
+  });
 }
 
 export async function analyzeClassPerformanceServer(students: Student[]): Promise<ClassAnalysis> {
@@ -522,7 +557,21 @@ export const IMAGE_CONFIG = {
   aspectRatio: '16:9',
   safetyFilterLevel: SafetyFilterLevel.BLOCK_LOW_AND_ABOVE,
   personGeneration: PersonGeneration.ALLOW_ADULT,
+  // Report filtered images (raiFilteredReason) instead of silently dropping them.
+  includeRaiReason: true,
 } as const satisfies GenerateImagesConfig;
+
+/**
+ * Pure: the data URL of the first generated image. A response with no image bytes is the provider
+ * filtering the request (Imagen returns an empty list, or an entry carrying raiFilteredReason, when
+ * its safety filter drops the image), so it is a safety block rather than an empty success: the route
+ * answers 422 SAFETY_BLOCK and keeps the credit, like any other block.
+ */
+export function imageUrlFromResponse(response: Pick<GenerateImagesResponse, 'generatedImages'>): string {
+  const img = response.generatedImages?.[0];
+  if (!img || img.raiFilteredReason || !img.image?.imageBytes) throw new ContentBlockedError('SAFETY');
+  return `data:${img.image.mimeType || 'image/jpeg'};base64,${img.image.imageBytes}`;
+}
 
 /** Build the Imagen prompt. Every interpolated value is cleaned onto a single line. */
 export function buildImagePrompt(unit: WeekUnit, description?: string): string {
@@ -547,15 +596,13 @@ export async function generateEducationalImageServer(unit: WeekUnit, description
       config: { ...IMAGE_CONFIG },
     });
 
-    if (response.generatedImages && response.generatedImages.length > 0) {
-      const img = response.generatedImages[0];
-      if (img.image) return `data:${img.image.mimeType};base64,${img.image.imageBytes}`;
-    }
-    return '';
+    return imageUrlFromResponse(response);
   } catch (error: unknown) {
+    if (error instanceof ContentBlockedError) throw error;
     const msg = error instanceof Error ? error.message : String(error);
     if (/safety|block/i.test(msg)) throw new ContentBlockedError('SAFETY');
-    console.error('Image generation failed', msg);
+    // Error name only: the provider message can echo the prompt.
+    console.error(JSON.stringify({ event: 'image_generation_failed', error: error instanceof Error ? error.name : typeof error }));
     throw error;
   }
 }
