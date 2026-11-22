@@ -140,65 +140,71 @@ function stripListedTags(text: string): string {
   return current;
 }
 
+type Edit = { from: number; to: number; text: string };
+
+/** For each `(` index, the index of its matching `)` (or -1). One linear pass. */
+function matchParens(text: string): Int32Array {
+  const match = new Int32Array(text.length).fill(-1);
+  const stack: number[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c === 40) stack.push(i);
+    else if (c === 41 && stack.length > 0) match[stack.pop() as number] = i;
+  }
+  return match;
+}
+
 /**
- * Rewrite `[label](target)` (or `![alt](target)` when `image`) with a single forward scan.
- * The label may not contain `[`, `]` or a newline and the target may not contain `[` or a newline
- * (one level of nested parentheses is allowed), so each character is scanned a bounded number of
- * times and pathological input cannot cause quadratic work.
+ * Neutralise markdown links and images in one linear pass.
+ * `[` positions are kept on a stack; a `]` pops the nearest one, and when it is directly followed
+ * by `(` with a balanced `)` it forms a link (or an image when the `[` is preceded by `!`). Labels
+ * may contain newlines and nested brackets; targets may contain anything, including newlines, `[`
+ * and balanced parentheses. The markers and target are removed and the label text stays in place,
+ * so images become their alt text, links become their label, and in `resources` links gain
+ * ` (url)`. A `[` that never closes into a link is left as plain text (so `[a [b](c)` becomes
+ * `[a b`, with no live link). Parenthesis matching is precomputed, so no step rescans the input.
  */
-function rewriteMarkdownLinks(
-  text: string,
-  image: boolean,
-  replace: (label: string, target: string) => string,
-): string {
+function rewriteMarkdownLinks(text: string, keepUrls: boolean): string {
+  if (!text.includes('](')) return text;
+  const match = matchParens(text);
+  const opens: number[] = [];
+  const edits: Edit[] = [];
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    if (c === 91) {
+      opens.push(i);
+    } else if (c === 93 && opens.length > 0) {
+      const s = opens.pop() as number;
+      const end = text.charCodeAt(i + 1) === 40 ? match[i + 1] : -1;
+      if (end === -1) continue;
+      const image = s > 0 && text.charCodeAt(s - 1) === 33;
+      edits.push({ from: image ? s - 1 : s, to: s + 1, text: '' });
+      let suffix = '';
+      if (keepUrls && !image) {
+        const url = text.slice(i + 2, end).trim().split(/\s+/)[0] ?? '';
+        const labelLength = i - s - 1;
+        const duplicate =
+          labelLength >= url.length && labelLength <= url.length + 100 && text.slice(s + 1, i).trim() === url;
+        if (url && !duplicate) suffix = ` (${url})`;
+      }
+      edits.push({ from: i, to: end + 1, text: suffix });
+      i = end;
+    }
+  }
+  if (edits.length === 0) return text;
+  edits.sort((a, b) => a.from - b.from);
   const out: string[] = [];
   let last = 0;
-  let i = text.indexOf('[');
-  while (i !== -1) {
-    if (image && (i === 0 || text[i - 1] !== '!')) {
-      i = text.indexOf('[', i + 1);
-      continue;
-    }
-    let j = i + 1;
-    while (j < text.length && text[j] !== ']' && text[j] !== '[' && text[j] !== '\n') j++;
-    let end = -1;
-    if (text[j] === ']' && text[j + 1] === '(') {
-      let depth = 0;
-      for (let k = j + 2; k < text.length; k++) {
-        const c = text[k];
-        if (c === '[' || c === '\n') break;
-        if (c === '(') depth++;
-        else if (c === ')') {
-          if (depth === 0) {
-            end = k;
-            break;
-          }
-          depth--;
-        }
-      }
-    }
-    if (end === -1) {
-      i = text.indexOf('[', i + 1);
-      continue;
-    }
-    out.push(text.slice(last, image ? i - 1 : i), replace(text.slice(i + 1, j), text.slice(j + 2, end)));
-    last = end + 1;
-    i = text.indexOf('[', last);
+  for (const e of edits) {
+    out.push(text.slice(last, e.from), e.text);
+    last = e.to;
   }
   out.push(text.slice(last));
   return out.join('');
 }
 
 function sanitiseMarkdown(kind: GenKind, text: string): string {
-  const keepUrls = kind === 'resources';
-  const noImages = rewriteMarkdownLinks(text, true, (alt) => alt);
-  const noLinks = rewriteMarkdownLinks(noImages, false, (label, target) => {
-    if (!keepUrls) return label;
-    const url = target.trim().split(/\s+/)[0] ?? '';
-    if (!url || label.trim() === url) return label || url;
-    return `${label} (${url})`;
-  });
-  return stripListedTags(noLinks);
+  return stripListedTags(rewriteMarkdownLinks(text, kind === 'resources'));
 }
 
 /**

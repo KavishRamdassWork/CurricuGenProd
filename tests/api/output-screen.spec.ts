@@ -335,3 +335,120 @@ test.describe('screenOutput: pathological input stays fast', () => {
     expect(screenOutput('worksheet', 'see [Foo](https://en.wikipedia.org/wiki/Foo_(bar)) ok')).toBe('see Foo ok');
   });
 });
+
+test.describe('screenOutput: link and image rewriting edge cases', () => {
+  const evasions = [
+    '![a](https://evil.example/i.png?x[1])',
+    '[a](http://x/?q[0]=1)',
+    '![alt\nmore](https://evil.example/i.png)',
+    '[a\nb](https://evil.example)',
+    '[a](https://evil.example/\nmore)',
+    '![a](https://evil.example/i.png?x[1]\ny[2])',
+    '[a](http://x/(b))',
+    '[x [a](https://evil.example/?q[]=1)',
+    '[a [b](https://evil.example)',
+    '[![alt](https://evil.example/i.png)](https://evil.example/l?q[0]=1)',
+  ];
+
+  for (const input of evasions) {
+    for (const kind of ['worksheet', 'assignment', 'refine'] as GenKind[]) {
+      test(`${kind} neutralises ${JSON.stringify(input)}`, () => {
+        const out = screenOutput(kind, `before ${input} after`);
+        expect(out).not.toContain('evil.example');
+        expect(out).not.toContain('x/?q');
+        expect(out).not.toContain('x/(b)');
+        expect(out).not.toMatch(/\]\(/);
+        expect(out.startsWith('before ')).toBe(true);
+        expect(out.endsWith(' after')).toBe(true);
+      });
+    }
+  }
+
+  test('[ inside a target', () => {
+    expect(screenOutput('worksheet', 'a [t](http://x/?q[0]=1) b')).toBe('a t b');
+  });
+
+  test('newline inside a label', () => {
+    expect(screenOutput('worksheet', 'a [t\nu](http://x) b')).toBe('a t\nu b');
+  });
+
+  test('newline inside a target', () => {
+    expect(screenOutput('worksheet', 'a [t](http://x\n/y) b')).toBe('a t b');
+  });
+
+  test('balanced parentheses inside a target', () => {
+    expect(screenOutput('worksheet', 'a [t](http://x/(b)) c')).toBe('a t c');
+  });
+
+  test('images with brackets or newlines keep only alt text', () => {
+    expect(screenOutput('worksheet', '![alt\nmore](https://e.example/i.png?x[1])')).toBe('alt\nmore');
+  });
+
+  test('a label with an unmatched opening bracket leaves no live link', () => {
+    expect(screenOutput('worksheet', '[a [b](c)')).toBe('[a b');
+  });
+
+  test('nested bracket labels still resolve', () => {
+    expect(screenOutput('worksheet', '[a [b] c](https://evil.example)')).toBe('a [b] c');
+  });
+
+  test('brackets without links are left alone', () => {
+    for (const s of ['arr[0] = [1, 2]', 'f(x) [i] (y) no', 'see [1] and (2)']) {
+      expect(screenOutput('worksheet', s)).toBe(s);
+    }
+  });
+
+  test('resources keeps text (url) for targets with brackets, newlines and parentheses', () => {
+    const body = (x: string) => validFor('resources', x);
+    expect(screenOutput('resources', body('[Doc](https://a.example/?q[0]=1)'))).toContain(
+      'Doc (https://a.example/?q[0]=1)',
+    );
+    expect(screenOutput('resources', body('[Doc](https://a.example/w/F_(b))'))).toContain(
+      'Doc (https://a.example/w/F_(b))',
+    );
+    expect(screenOutput('resources', body('[Do\nc](https://a.example "title")'))).toContain(
+      'Do\nc (https://a.example)',
+    );
+  });
+
+  test('resources drops images with brackets in the target', () => {
+    const out = screenOutput('resources', validFor('resources', '![alt](https://e.example/i.png?x[1])'));
+    expect(out).toContain('alt');
+    expect(out).not.toContain('e.example');
+  });
+});
+
+test.describe('screenOutput: more pathological link input stays fast', () => {
+  const N = 300_000;
+  const inputs: Array<[string, string]> = [
+    ['[a]( then many [', '[a](' + '['.repeat(N)],
+    ['[a]( then many (', '[a](' + '('.repeat(N)],
+    ['[a]( repeated with parens', '[a](('.repeat(N / 5)],
+    ['[a]( then many ]](', '[a](' + ']]('.repeat(N / 3)],
+    ['repeated ](', ']('.repeat(N / 2)],
+    ['repeated ]( preceded by one [', '[' + ']('.repeat(N / 2)],
+    ['repeated [ then repeated ](', '['.repeat(N / 2) + ']('.repeat(N / 4)],
+    ['repeated [[a](', '[[a]('.repeat(N / 6)],
+    ['deep nesting', '['.repeat(N / 4) + 'a' + ']'.repeat(N / 8) + '(x)'.repeat(N / 24)],
+    ['long label then unclosed target', '[' + 'x'.repeat(N) + '](y'],
+    ['long closed target', '[a](' + 'x'.repeat(N) + ')'],
+  ];
+
+  for (const kind of ['worksheet', 'resources'] as GenKind[]) {
+    for (const [name, input] of inputs) {
+      test(`${kind}: ${name} completes in under 1s`, () => {
+        const body = validFor(kind, input);
+        const started = Date.now();
+        const out = screenOutput(kind, body);
+        const elapsed = Date.now() - started;
+        expect(typeof out).toBe('string');
+        expect(elapsed).toBeLessThan(1000);
+      });
+    }
+  }
+
+  test('a long evil target is neutralised, not skipped', () => {
+    const out = screenOutput('worksheet', '[a](https://evil.example/' + 'x'.repeat(N) + ')');
+    expect(out).toBe('a');
+  });
+});
