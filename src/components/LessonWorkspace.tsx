@@ -619,15 +619,15 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-8 md:p-12 relative bg-slate-100">
-          <div className="mx-auto min-h-[1000px] bg-white shadow-xl rounded-xl overflow-hidden print:shadow-none print:rounded-none">
+        <div className="flex-1 overflow-y-auto p-2 md:p-12 relative bg-slate-100">
+          <div className="mx-auto min-h-[1000px] bg-white md:shadow-xl md:rounded-xl overflow-hidden print:shadow-none print:rounded-none">
             {loading && (
               <div className="absolute inset-0 bg-white/90 z-50 flex flex-col items-center justify-center">
                 <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
                 <p className="text-slate-500 font-medium">Drafting content...</p>
               </div>
             )}
-            <div className={`p-12 lg:p-16 print:p-0 ${isRefining ? 'is-refining' : ''}`}>
+            <div className={`p-5 md:p-12 lg:p-16 print:p-0 ${isRefining ? 'is-refining' : ''}`}>
               <DocumentHeader />
               {activeSection === 'plan' && (lessonPlan ? <div className="markdown-body"><RenderMarkdown docType="teacher">{lessonPlan}</RenderMarkdown></div> : <EmptyState icon={BookOpen} label="Lesson Plan" action={() => handleGenerateMain('plan')} />)}
               {activeSection === 'slides' && (slides ? <div className="markdown-body"><RenderMarkdown docType="teacher">{slides}</RenderMarkdown></div> : <EmptyState icon={MonitorPlay} label="Slide Outline" action={() => handleGenerateMain('slides')} />)}
@@ -1010,7 +1010,7 @@ const RenderMarkdown = ({
         table: ({ node: _node, ...props }) => (
           <div className="overflow-x-auto my-6">
             <table
-              className="min-w-full text-sm divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden"
+              className="min-w-full text-xs md:text-sm divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden"
               {...props}
             />
           </div>
@@ -1018,12 +1018,12 @@ const RenderMarkdown = ({
         thead: ({ node: _node, ...props }) => <thead className="bg-slate-50" {...props} />,
         th: ({ node: _node, ...props }) => (
           <th
-            className="px-4 py-3 text-left font-bold text-slate-700 uppercase tracking-wider"
+            className="px-2 py-2 md:px-4 md:py-3 text-left font-bold text-slate-700 uppercase tracking-wider"
             {...props}
           />
         ),
         td: ({ node: _node, ...props }) => (
-          <td className="px-4 py-3 border-t border-slate-200" {...props} />
+          <td className="px-2 py-2 md:px-4 md:py-3 border-t border-slate-200" {...props} />
         ),
       }}
     >
