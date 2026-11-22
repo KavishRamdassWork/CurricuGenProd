@@ -67,6 +67,9 @@ const REQUIRED_HEADINGS: Partial<Record<GenKind, string[]>> = {
 
 const MIN_SLIDES = 3;
 
+/** Longest heading text compared; anything past it is ignored. */
+const MAX_HEADING_CHARS = 300;
+
 /**
  * Reduce a heading's text to a comparable form, tolerating normal model formatting: markdown emphasis
  * (`*`, `_`) and backticks, leading numbering (`1.`, `1)`), leading emoji or other symbols, trailing
@@ -88,7 +91,9 @@ function normaliseHeading(text: string): string {
 /** Normalised text of every level-2 (`## `) heading line. `###` and `#` lines are not included. */
 function levelTwoHeadings(text: string): string[] {
   const out: string[] = [];
-  for (const m of text.matchAll(/^##(?!#)[ \t]+(.*)$/gm)) out.push(normaliseHeading(m[1]));
+  // A real heading is short. Capping the line keeps normalisation bounded when a line carries tens of
+  // thousands of spaces or colons (the trailing-run patterns in normaliseHeading are quadratic on those).
+  for (const m of text.matchAll(/^##(?!#)[ \t]+(.*)$/gm)) out.push(normaliseHeading(m[1].slice(0, MAX_HEADING_CHARS)));
   return out;
 }
 
@@ -231,6 +236,31 @@ function rewriteMarkdownLinks(text: string, keepUrls: boolean): string {
 
 function sanitiseMarkdown(kind: GenKind, text: string): string {
   return stripListedTags(rewriteMarkdownLinks(text, kind === 'resources'));
+}
+
+/** A reply this short (or shorter than a quarter of the original) that keeps no section is a refusal. */
+const REFUSAL_MAX_CHARS = 400;
+
+/**
+ * Check a refine result against the content it was asked to edit, before the caller replaces the
+ * teacher's lesson with it. The refine prompt requires every `##` section heading to be kept, so:
+ *  - all headings kept: the edit is returned unchanged;
+ *  - none kept and the reply is short: the model declined (a ContentBlockedError, so the credit is
+ *    spent and probing is not free), and the original content must stay untouched;
+ *  - anything else (some headings lost, or a long reply with none): a MalformedOutputError.
+ * Content with no `##` headings has nothing to preserve and is returned as is.
+ */
+export function screenRefinedContent(original: string, refined: string): string {
+  const wanted = [...new Set(levelTwoHeadings(original))].filter(Boolean);
+  if (wanted.length === 0) return refined;
+
+  const kept = levelTwoHeadings(refined);
+  const missing = wanted.filter((h) => !hasHeading(kept, h));
+  if (missing.length === 0) return refined;
+
+  const short = refined.trim().length <= Math.max(REFUSAL_MAX_CHARS, Math.floor(original.length * 0.25));
+  if (missing.length === wanted.length && short) throw new ContentBlockedError('SAFETY');
+  throw new MalformedOutputError('Refined content did not keep the original sections');
 }
 
 /**

@@ -10,7 +10,7 @@ import { Pinecone } from '@pinecone-database/pinecone';
 import { getPhaseForGrade } from './curriculumHelper';
 import { generateText, getAIClient } from '@/lib/modelRunner';
 import { TEACHER_INSTRUCTION_LABEL, cleanText, fence, fenceWithNonce } from '@/lib/promptSafety';
-import { ContentBlockedError, MalformedOutputError } from '@/lib/outputScreen';
+import { ContentBlockedError, MalformedOutputError, screenRefinedContent } from '@/lib/outputScreen';
 import { attachmentParts } from '@/lib/attachments';
 
 export { getAIClient } from '@/lib/modelRunner';
@@ -512,12 +512,15 @@ ${fence('current-content', currentContent, 30000)}
     3. Return ONLY the updated Markdown. No explanation, no preamble, no commentary.
   `;
 
-  return generateText({
+  const refined = await generateText({
     kind: 'refine',
     parts: attachmentParts(basePrompt, file),
     temperature: 0.3,
     instructionNonce: teacher.nonce,
   });
+  // The client replaces the lesson with this text, so a refusal or a result that dropped sections must
+  // fail here instead of being returned as the new content.
+  return screenRefinedContent(currentContent, refined);
 }
 
 export async function analyzeClassPerformanceServer(students: Student[]): Promise<ClassAnalysis> {

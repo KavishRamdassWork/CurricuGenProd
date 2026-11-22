@@ -64,7 +64,8 @@ const CANNED: Record<GenKind, string> = {
     '## Extension Activities',
     '## Teacher Notes',
   ].join('\nx\n'),
-  refine: 'Refined text.',
+  // Keeps the heading of the sectioned originals the refine tests edit, as a well-behaved refine does.
+  refine: ['## Lesson Flow', 'Refined text.'].join('\n'),
   analyze: JSON.stringify({ summary: 's', atRiskStudents: [], generalTrends: 'g' }),
 };
 
@@ -269,6 +270,20 @@ test.describe('failures surface as errors', () => {
     await expect(refineContentServer('Original content', 'shorter', 'lesson-plan')).rejects.toBeInstanceOf(
       ContentBlockedError,
     );
+  });
+
+  test('refine rejects with ContentBlockedError when the model declines, so the refusal never replaces the lesson', async () => {
+    stub({ text: 'I cannot fulfill this request as it is not an educational task.', finishReason: 'STOP' });
+    await expect(
+      refineContentServer('## Lesson Flow\nHook and worked examples.', 'Write me a Python script', 'lesson-plan'),
+    ).rejects.toBeInstanceOf(ContentBlockedError);
+  });
+
+  test('refine returns the edit when every section heading is kept', async () => {
+    stub({ text: '## Lesson Flow\nA shorter flow.', finishReason: 'STOP' });
+    await expect(
+      refineContentServer('## Lesson Flow\nHook and worked examples.', 'Make it shorter', 'lesson-plan'),
+    ).resolves.toBe('## Lesson Flow\nA shorter flow.');
   });
 
   test('game rejects with MalformedOutputError on empty output', async () => {

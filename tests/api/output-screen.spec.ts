@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import {
   screenOutput,
+  screenRefinedContent,
   ContentBlockedError,
   MalformedOutputError,
   type GenKind,
@@ -515,5 +516,62 @@ test.describe('screenOutput: more pathological link input stays fast', () => {
   test('a long evil target is neutralised, not skipped', () => {
     const out = screenOutput('worksheet', '[a](https://evil.example/' + 'x'.repeat(N) + ')');
     expect(out).toBe('a');
+  });
+});
+
+test.describe('screenRefinedContent: a refusal or broken edit never replaces the lesson', () => {
+  const original = [
+    '# Lesson',
+    '## Lesson Flow',
+    'Hook, then direct instruction with worked examples. '.repeat(20),
+    '## Closure & Exit Ticket',
+    'Ask each learner for one thing they learned. '.repeat(20),
+  ].join('\n');
+
+  test('a short refusal that keeps none of the headings is a blocked request (no refund)', () => {
+    const refusal = 'I cannot fulfill this request as it asks for non-educational computer code.';
+    expect(() => screenRefinedContent(original, refusal)).toThrow(ContentBlockedError);
+  });
+
+  test('a long reply that keeps none of the headings is malformed output (capped refund)', () => {
+    const ramble = 'Here is something completely different without any structure. '.repeat(60);
+    expect(() => screenRefinedContent(original, ramble)).toThrow(MalformedOutputError);
+  });
+
+  test('keeping only some of the headings is malformed output', () => {
+    const partial = '## Lesson Flow\nShorter flow.\n';
+    expect(() => screenRefinedContent(original, partial)).toThrow(MalformedOutputError);
+  });
+
+  test('keeping every heading returns the refined text unchanged', () => {
+    const refined = '## Lesson Flow\nShorter flow.\n## Closure & Exit Ticket\nOne question.';
+    expect(screenRefinedContent(original, refined)).toBe(refined);
+  });
+
+  test('headings formatted the way models normally format them still count as kept', () => {
+    const refined = '## **Lesson Flow**\nShorter.\n## 2. Closure and Exit Ticket:\nOne question.';
+    expect(screenRefinedContent(original, refined)).toBe(refined);
+  });
+
+  test('content with no ## headings has nothing to preserve, so any non-empty edit is returned', () => {
+    expect(screenRefinedContent('Plain text with no sections.', 'Refined text.')).toBe('Refined text.');
+  });
+
+  test('a refusal is not mistaken for an edit when the original is short but sectioned', () => {
+    const small = '## Lesson Flow\nShort body.';
+    expect(() => screenRefinedContent(small, 'I am unable to fulfill this request.')).toThrow(ContentBlockedError);
+  });
+});
+
+test.describe('heading normalisation stays fast on hostile heading lines', () => {
+  test('a heading line with 50,000 spaces mid-line is handled in under 1s', () => {
+    const hostile = '## Lesson Flow' + ' '.repeat(50_000) + 'x\nbody';
+    const started = Date.now();
+    try {
+      screenRefinedContent(hostile, '## Lesson Flow\nShorter.');
+    } catch {
+      // Whether it passes or is rejected is not the point here: only how long the check takes.
+    }
+    expect(Date.now() - started).toBeLessThan(1000);
   });
 });
