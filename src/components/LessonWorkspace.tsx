@@ -9,7 +9,7 @@ import 'katex/dist/katex.min.css';
 import { WeekUnit, UploadedFile, ChatMessage, EducationalResource, TemplateConfig, Classroom, LessonContent } from '@/lib/types';
 import { computeSettingsHash } from '@/lib/classHash';
 import { generateLessonPlan, generatePresentation, generateWorksheet, generateAssignment, generateAssessment, generateMemo, generateGame, generateResources, refineContent, generateEducationalImage } from '@/lib/gemini';
-import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, Download, ChevronDown, AlertTriangle, LucideIcon } from 'lucide-react';
+import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, Download, ChevronDown, MoreVertical, AlertTriangle, LucideIcon } from 'lucide-react';
 
 interface LessonWorkspaceProps {
   units: WeekUnit[];
@@ -52,6 +52,10 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   const [tests, setTests] = useState<EducationalResource[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSectionMenuOpen, setIsMobileSectionMenuOpen] = useState(false);
+  const [isMobileMoreOpen, setIsMobileMoreOpen] = useState(false);
+  const [isBarHidden, setIsBarHidden] = useState(false);
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  const lastScrollTop = useRef(0);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [templateConfig, setTemplateConfig] = useState<TemplateConfig>({ schoolName: '', logo: null, font: 'modern', layout: 'standard' });
@@ -74,7 +78,13 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   const [isGeneratingSlideImages, setIsGeneratingSlideImages] = useState(false);
   const [slideImageProgress, setSlideImageProgress] = useState({ current: 0, total: 0 });
 
+  // The save effect below runs on mount before saved content has been loaded into state.
+  // Without this guard it persists an empty lesson over the real one (racing the second,
+  // correct save), which can wipe a lesson on open.
+  const skipNextSave = useRef(false);
+
   useEffect(() => {
+    skipNextSave.current = true;
     const saved = activeClass.savedLessons?.[unitKey];
     if (saved) {
       setLessonPlan(saved.plan || null);
@@ -96,6 +106,10 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   }, [activeClass.id, unitKey]);
 
   useEffect(() => {
+    if (skipNextSave.current) {
+      skipNextSave.current = false;
+      return;
+    }
     onSaveClassContent(activeClass.id, unitKey, {
       plan: lessonPlan || '',
       slides: slides || '',
@@ -422,176 +436,21 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
     );
   };
 
-  return (
-    <div className="flex flex-col md:flex-row h-full bg-slate-100 overflow-hidden relative">
-      {/* Single shared file input for "Add Context" (desktop sidebar + mobile bar) */}
-      <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
-      {/* LEFT TOOLBAR */}
-      <aside className={`no-print hidden md:flex bg-white border-r border-slate-200 flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
-        <div className="h-16 border-b border-slate-100 flex items-center px-4 gap-3">
-          <button onClick={onBack} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><ArrowLeft className="w-5 h-5" /></button>
-          {!isSidebarCollapsed && <span className="font-bold text-slate-800 truncate">Workspace</span>}
-        </div>
-        <div className="flex-1 overflow-y-auto p-3 space-y-6">
-          <div className={`p-3 rounded-xl border-2 border-dashed transition-colors ${attachedFile ? 'border-blue-200 bg-blue-50' : 'border-slate-200 hover:border-blue-300'}`}>
-            {!attachedFile ? (
-              <div onClick={() => fileInputRef.current?.click()} className="cursor-pointer flex flex-col items-center text-center">
-                <Upload className="w-5 h-5 text-slate-400 mb-1" />
-                {!isSidebarCollapsed && <span className="text-xs font-bold text-slate-500">Add Context PDF</span>}
-              </div>
-            ) : (
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 overflow-hidden">
-                  <Paperclip className="w-4 h-4 text-blue-600 flex-shrink-0" />
-                  {!isSidebarCollapsed && <span className="text-xs font-medium text-blue-700 truncate">{attachedFile.name}</span>}
-                </div>
-                <button onClick={() => setAttachedFile(null)}><X className="w-3 h-3 text-slate-400 hover:text-red-500" /></button>
-              </div>
-            )}
-          </div>
-          <div>
-            {!isSidebarCollapsed && <h3 className="px-2 text-xs font-bold text-slate-400 uppercase mb-2">Teacher Guide</h3>}
-            <div className="space-y-1">
-              <NavButton icon={BookOpen} label="Lesson Plan" active={activeSection === 'plan'} onClick={() => setActiveSection('plan')} collapsed={isSidebarCollapsed} hasContent={!!lessonPlan} isOutdated={isUnitOutdated && !!lessonPlan} />
-              <NavButton icon={MonitorPlay} label="Slides" active={activeSection === 'slides'} onClick={() => setActiveSection('slides')} collapsed={isSidebarCollapsed} hasContent={!!slides} isOutdated={isUnitOutdated && !!slides} />
-            </div>
-          </div>
-          <div>
-            <div className="flex items-center justify-between px-2 mb-2">
-              {!isSidebarCollapsed && <h3 className="text-xs font-bold text-slate-400 uppercase">Resources</h3>}
-              <button onClick={() => { setCreationType('worksheet'); setIsCreationModalOpen(true); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Plus className="w-4 h-4" /></button>
-            </div>
-            <div className="space-y-1">
-              {[...worksheets, ...assignments, ...tests].map(r => (
-                <button key={r.id} onClick={() => { setActiveSection('educational'); setSelectedResourceId(r.id); }} className={`w-full flex items-center gap-3 p-2 rounded-lg text-sm transition-all ${selectedResourceId === r.id && activeSection === 'educational' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
-                  {r.type === 'worksheet' && <FileText className="w-4 h-4" />}
-                  {r.type === 'assignment' && <ClipboardList className="w-4 h-4" />}
-                  {r.type === 'test' && <HelpCircle className="w-4 h-4" />}
-                  {!isSidebarCollapsed && <span className="truncate">{r.title}</span>}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div>
-            {!isSidebarCollapsed && <h3 className="px-2 text-xs font-bold text-slate-400 uppercase mb-2">Enhancements</h3>}
-            <div className="space-y-1">
-              <NavButton icon={ImageIcon} label="Visual Aids" active={activeSection === 'visuals'} onClick={() => setActiveSection('visuals')} collapsed={isSidebarCollapsed} hasContent={!!generatedImageUrl} isOutdated={isUnitOutdated && !!generatedImageUrl} />
-              <NavButton icon={Gamepad2} label="Activity" active={activeSection === 'game'} onClick={() => setActiveSection('game')} collapsed={isSidebarCollapsed} hasContent={!!game} isOutdated={isUnitOutdated && !!game} />
-              <NavButton icon={Library} label="Links" active={activeSection === 'resources'} onClick={() => setActiveSection('resources')} collapsed={isSidebarCollapsed} hasContent={!!resources} isOutdated={isUnitOutdated && !!resources} />
-            </div>
-          </div>
-        </div>
-      </aside>
+  const handleContentScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const top = e.currentTarget.scrollTop;
+    const delta = top - lastScrollTop.current;
+    if (Math.abs(delta) < 8) return;
+    setIsBarHidden(delta > 0 && top > 80);
+    lastScrollTop.current = top;
+  };
 
-      <div className="no-print md:hidden relative flex-none flex items-center border-b border-slate-200 bg-white z-30">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="w-12 min-h-12 flex items-center justify-center text-slate-500 flex-shrink-0"
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </button>
-        <button
-          onClick={() => setIsMobileSectionMenuOpen(prev => !prev)}
-          className="flex-1 min-w-0 min-h-12 flex items-center justify-between pr-2 font-bold text-slate-800"
-        >
-          <span className="flex items-center gap-2 min-w-0">
-            {(() => {
-              if (activeSection === 'educational') {
-                const res = [...worksheets, ...assignments, ...tests].find(r => r.id === selectedResourceId);
-                return <><FileText className="w-4 h-4 flex-shrink-0" /> <span className="truncate">{res?.title ?? 'Resource'}</span></>;
-              }
-              const current = MOBILE_SECTIONS.find(s => s.key === activeSection);
-              const Icon = current?.icon ?? BookOpen;
-              return <><Icon className="w-4 h-4 flex-shrink-0" /> <span className="truncate">{current?.label ?? 'Lesson Plan'}</span></>;
-            })()}
-          </span>
-          <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${isMobileSectionMenuOpen ? 'rotate-180' : ''}`} />
-        </button>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          aria-label={attachedFile ? `Context attached: ${attachedFile.name}` : 'Add context PDF'}
-          className={`w-12 min-h-12 flex items-center justify-center flex-shrink-0 ${attachedFile ? 'text-blue-600' : 'text-slate-500'}`}
-        >
-          {attachedFile ? <Paperclip className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
-        </button>
-        <button
-          onClick={() => { setCreationType('worksheet'); setIsCreationModalOpen(true); }}
-          aria-label="New worksheet, assignment or test"
-          className="w-12 min-h-12 flex items-center justify-center text-blue-600 flex-shrink-0"
-        >
-          <Plus className="w-5 h-5" />
-        </button>
-        {isMobileSectionMenuOpen && (
-          <>
-            <div className="fixed inset-0 z-20" onClick={() => setIsMobileSectionMenuOpen(false)} />
-            <div className="absolute left-0 right-0 top-full max-h-[70vh] overflow-y-auto bg-white border-b border-slate-200 shadow-lg z-30">
-              {attachedFile && (
-                <div className="flex items-center justify-between gap-2 px-4 min-h-12 bg-blue-50 text-blue-700 text-sm">
-                  <span className="flex items-center gap-2 min-w-0"><Paperclip className="w-4 h-4 flex-shrink-0" /><span className="truncate">{attachedFile.name}</span></span>
-                  <button onClick={() => setAttachedFile(null)} aria-label="Remove context file" className="w-10 h-10 flex items-center justify-center flex-shrink-0"><X className="w-4 h-4" /></button>
-                </div>
-              )}
-              {MOBILE_SECTIONS.map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  onClick={() => { setActiveSection(key); setIsMobileSectionMenuOpen(false); }}
-                  className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${activeSection === key ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
-                >
-                  <Icon className="w-4 h-4" /> {label}
-                </button>
-              ))}
-              {[...worksheets, ...assignments, ...tests].length > 0 && (
-                <div className="border-t border-slate-100">
-                  <div className="px-4 pt-3 pb-1 text-xs font-bold text-slate-400 uppercase">Resources</div>
-                  {[...worksheets, ...assignments, ...tests].map(r => (
-                    <button
-                      key={r.id}
-                      onClick={() => { setActiveSection('educational'); setSelectedResourceId(r.id); setIsMobileSectionMenuOpen(false); }}
-                      className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${selectedResourceId === r.id && activeSection === 'educational' ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
-                    >
-                      {r.type === 'worksheet' && <FileText className="w-4 h-4 flex-shrink-0" />}
-                      {r.type === 'assignment' && <ClipboardList className="w-4 h-4 flex-shrink-0" />}
-                      {r.type === 'test' && <HelpCircle className="w-4 h-4 flex-shrink-0" />}
-                      <span className="truncate">{r.title}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* MAIN DOCUMENT AREA */}
-      <main className="flex-1 flex flex-col h-full relative overflow-hidden">
-        <div className="no-print h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-8 flex-none">
-          <div className="min-w-0 pr-2 md:pr-4 flex-1">
-            <h1 className={`text-base md:text-lg font-bold text-slate-900 items-center gap-2 truncate ${activeSection === 'educational' ? 'hidden md:flex' : 'flex'}`}>
-              <span className="truncate">{isRevisionMode ? "Revision Plan" : units[0].topicTitle}</span>
-              {activeSection === 'educational' && selectedResourceId && (
-                <span className="text-slate-400 font-normal truncate flex-shrink-0">
-                  / {[...worksheets, ...assignments, ...tests].find(r => r.id === selectedResourceId)?.title}
-                </span>
-              )}
-            </h1>
-          </div>
-          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
-            {activeSection === 'educational' && (
-              <div className="flex bg-slate-100 p-1 rounded-lg mr-1 md:mr-4 flex-shrink-0">
-                <button onClick={() => setResourceViewMode('content')} className={`px-2 md:px-3 py-1.5 md:py-1 text-xs font-bold rounded-md ${resourceViewMode === 'content' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Content</button>
-                <button onClick={() => setResourceViewMode('memo')} className={`px-2 md:px-3 py-1.5 md:py-1 text-xs font-bold rounded-md ${resourceViewMode === 'memo' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500'}`}>Memo</button>
-              </div>
-            )}
-            <button onClick={() => setIsTemplateModalOpen(true)} aria-label="Document settings" className="p-2.5 md:p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Settings className="w-5 h-5" /></button>
-            <button onClick={() => setIsChatOpen(!isChatOpen)} aria-label="AI assistant" className={`p-2.5 md:p-2 rounded-lg transition-colors flex-shrink-0 ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="w-5 h-5" /></button>
-            {/* Download Dropdown */}
+  const downloadMenu = (
             <div className="relative flex-shrink-0">
               <button
                 onClick={() => setIsDownloadOpen(prev => !prev)}
                 disabled={isDownloadLoading}
                 aria-label="Download"
-                className="flex items-center gap-1.5 px-3 py-2.5 md:py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 md:px-3 py-2.5 md:py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
               >
                 {isDownloadLoading
                   ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
@@ -666,18 +525,219 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                 );
               })()}
             </div>
+  );
+
+  return (
+    <div className="flex flex-col md:flex-row h-full bg-slate-100 overflow-hidden relative">
+      {/* Single shared file input for "Add Context" (desktop sidebar + mobile bar) */}
+      <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+      {/* LEFT TOOLBAR */}
+      <aside className={`no-print hidden md:flex bg-white border-r border-slate-200 flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
+        <div className="h-16 border-b border-slate-100 flex items-center px-4 gap-3">
+          <button onClick={onBack} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><ArrowLeft className="w-5 h-5" /></button>
+          {!isSidebarCollapsed && <span className="font-bold text-slate-800 truncate">Workspace</span>}
+        </div>
+        <div className="flex-1 overflow-y-auto p-3 space-y-6">
+          <div className={`p-3 rounded-xl border-2 border-dashed transition-colors ${attachedFile ? 'border-blue-200 bg-blue-50' : 'border-slate-200 hover:border-blue-300'}`}>
+            {!attachedFile ? (
+              <div onClick={() => fileInputRef.current?.click()} className="cursor-pointer flex flex-col items-center text-center">
+                <Upload className="w-5 h-5 text-slate-400 mb-1" />
+                {!isSidebarCollapsed && <span className="text-xs font-bold text-slate-500">Add Context PDF</span>}
+              </div>
+            ) : (
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 overflow-hidden">
+                  <Paperclip className="w-4 h-4 text-blue-600 flex-shrink-0" />
+                  {!isSidebarCollapsed && <span className="text-xs font-medium text-blue-700 truncate">{attachedFile.name}</span>}
+                </div>
+                <button onClick={() => setAttachedFile(null)}><X className="w-3 h-3 text-slate-400 hover:text-red-500" /></button>
+              </div>
+            )}
+          </div>
+          <div>
+            {!isSidebarCollapsed && <h3 className="px-2 text-xs font-bold text-slate-400 uppercase mb-2">Teacher Guide</h3>}
+            <div className="space-y-1">
+              <NavButton icon={BookOpen} label="Lesson Plan" active={activeSection === 'plan'} onClick={() => setActiveSection('plan')} collapsed={isSidebarCollapsed} hasContent={!!lessonPlan} isOutdated={isUnitOutdated && !!lessonPlan} />
+              <NavButton icon={MonitorPlay} label="Slides" active={activeSection === 'slides'} onClick={() => setActiveSection('slides')} collapsed={isSidebarCollapsed} hasContent={!!slides} isOutdated={isUnitOutdated && !!slides} />
+            </div>
+          </div>
+          <div>
+            <div className="flex items-center justify-between px-2 mb-2">
+              {!isSidebarCollapsed && <h3 className="text-xs font-bold text-slate-400 uppercase">Resources</h3>}
+              <button onClick={() => { setCreationType('worksheet'); setIsCreationModalOpen(true); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Plus className="w-4 h-4" /></button>
+            </div>
+            <div className="space-y-1">
+              {[...worksheets, ...assignments, ...tests].map(r => (
+                <button key={r.id} onClick={() => { setActiveSection('educational'); setSelectedResourceId(r.id); }} className={`w-full flex items-center gap-3 p-2 rounded-lg text-sm transition-all ${selectedResourceId === r.id && activeSection === 'educational' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
+                  {r.type === 'worksheet' && <FileText className="w-4 h-4" />}
+                  {r.type === 'assignment' && <ClipboardList className="w-4 h-4" />}
+                  {r.type === 'test' && <HelpCircle className="w-4 h-4" />}
+                  {!isSidebarCollapsed && <span className="truncate">{r.title}</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            {!isSidebarCollapsed && <h3 className="px-2 text-xs font-bold text-slate-400 uppercase mb-2">Enhancements</h3>}
+            <div className="space-y-1">
+              <NavButton icon={ImageIcon} label="Visual Aids" active={activeSection === 'visuals'} onClick={() => setActiveSection('visuals')} collapsed={isSidebarCollapsed} hasContent={!!generatedImageUrl} isOutdated={isUnitOutdated && !!generatedImageUrl} />
+              <NavButton icon={Gamepad2} label="Activity" active={activeSection === 'game'} onClick={() => setActiveSection('game')} collapsed={isSidebarCollapsed} hasContent={!!game} isOutdated={isUnitOutdated && !!game} />
+              <NavButton icon={Library} label="Links" active={activeSection === 'resources'} onClick={() => setActiveSection('resources')} collapsed={isSidebarCollapsed} hasContent={!!resources} isOutdated={isUnitOutdated && !!resources} />
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <div className={`no-print md:hidden absolute left-0 right-0 z-30 flex items-center bg-white border-b border-slate-200 transition-[top] duration-200 ${isBarHidden && !isMobileSectionMenuOpen && !isMobileMoreOpen && !isDownloadOpen ? '-top-14' : 'top-0'}`}>
+        <button
+          onClick={onBack}
+          aria-label="Back"
+          className="w-12 min-h-12 flex items-center justify-center text-slate-500 flex-shrink-0"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <button
+          onClick={() => { setIsMobileMoreOpen(false); setIsMobileSectionMenuOpen(prev => !prev); }}
+          className="flex-1 min-w-0 min-h-12 flex items-center justify-between pr-2 font-bold text-slate-800"
+        >
+          <span className="flex items-center gap-2 min-w-0">
+            {(() => {
+              if (activeSection === 'educational') {
+                const res = [...worksheets, ...assignments, ...tests].find(r => r.id === selectedResourceId);
+                return <><FileText className="w-4 h-4 flex-shrink-0" /> <span className="truncate">{res?.title ?? 'Resource'}</span></>;
+              }
+              const current = MOBILE_SECTIONS.find(s => s.key === activeSection);
+              const Icon = current?.icon ?? BookOpen;
+              return <><Icon className="w-4 h-4 flex-shrink-0" /> <span className="truncate">{current?.label ?? 'Lesson Plan'}</span></>;
+            })()}
+          </span>
+          <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${isMobileSectionMenuOpen ? 'rotate-180' : ''}`} />
+        </button>
+        <button
+          onClick={() => setIsChatOpen(!isChatOpen)}
+          aria-label="AI assistant"
+          className={`w-11 min-h-12 flex items-center justify-center flex-shrink-0 ${isChatOpen ? 'text-blue-600' : 'text-slate-500'}`}
+        >
+          <MessageSquare className="w-5 h-5" />
+        </button>
+        {downloadMenu}
+        <button
+          onClick={() => { setIsMobileSectionMenuOpen(false); setIsMobileMoreOpen(prev => !prev); }}
+          aria-label="More actions"
+          className="w-11 min-h-12 flex items-center justify-center text-slate-500 flex-shrink-0"
+        >
+          <MoreVertical className="w-5 h-5" />
+        </button>
+        {isMobileMoreOpen && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setIsMobileMoreOpen(false)} />
+            <div className="absolute right-2 top-full mt-1 w-60 bg-white border border-slate-200 rounded-xl shadow-xl z-30 overflow-hidden">
+              <button
+                onClick={() => { setIsMobileMoreOpen(false); fileInputRef.current?.click(); }}
+                className="w-full min-h-12 flex items-center gap-3 px-4 text-sm font-medium text-slate-700"
+              >
+                {attachedFile ? <Paperclip className="w-4 h-4 text-blue-600 flex-shrink-0" /> : <Upload className="w-4 h-4 flex-shrink-0" />}
+                <span className="truncate">{attachedFile ? attachedFile.name : 'Add context PDF'}</span>
+              </button>
+              {attachedFile && (
+                <button
+                  onClick={() => { setAttachedFile(null); setIsMobileMoreOpen(false); }}
+                  className="w-full min-h-12 flex items-center gap-3 px-4 text-sm font-medium text-red-600 border-t border-slate-100"
+                >
+                  <X className="w-4 h-4 flex-shrink-0" /> Remove context file
+                </button>
+              )}
+              <button
+                onClick={() => { setIsMobileMoreOpen(false); setCreationType('worksheet'); setIsCreationModalOpen(true); }}
+                className="w-full min-h-12 flex items-center gap-3 px-4 text-sm font-medium text-slate-700 border-t border-slate-100"
+              >
+                <Plus className="w-4 h-4 flex-shrink-0" /> New worksheet / assignment / test
+              </button>
+              <button
+                onClick={() => { setIsMobileMoreOpen(false); setIsTemplateModalOpen(true); }}
+                className="w-full min-h-12 flex items-center gap-3 px-4 text-sm font-medium text-slate-700 border-t border-slate-100"
+              >
+                <Settings className="w-4 h-4 flex-shrink-0" /> Document settings
+              </button>
+            </div>
+          </>
+        )}
+        {isMobileSectionMenuOpen && (
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setIsMobileSectionMenuOpen(false)} />
+            <div className="absolute left-0 right-0 top-full max-h-[70vh] overflow-y-auto bg-white border-b border-slate-200 shadow-lg z-30">
+              {MOBILE_SECTIONS.map(({ key, label, icon: Icon }) => (
+                <button
+                  key={key}
+                  onClick={() => { setActiveSection(key); setIsMobileSectionMenuOpen(false); }}
+                  className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${activeSection === key ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
+                >
+                  <Icon className="w-4 h-4" /> {label}
+                </button>
+              ))}
+              {[...worksheets, ...assignments, ...tests].length > 0 && (
+                <div className="border-t border-slate-100">
+                  <div className="px-4 pt-3 pb-1 text-xs font-bold text-slate-400 uppercase">Resources</div>
+                  {[...worksheets, ...assignments, ...tests].map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => { setActiveSection('educational'); setSelectedResourceId(r.id); setIsMobileSectionMenuOpen(false); }}
+                      className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${selectedResourceId === r.id && activeSection === 'educational' ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
+                    >
+                      {r.type === 'worksheet' && <FileText className="w-4 h-4 flex-shrink-0" />}
+                      {r.type === 'assignment' && <ClipboardList className="w-4 h-4 flex-shrink-0" />}
+                      {r.type === 'test' && <HelpCircle className="w-4 h-4 flex-shrink-0" />}
+                      <span className="truncate">{r.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* MAIN DOCUMENT AREA */}
+      <main className="flex-1 flex flex-col h-full relative overflow-hidden">
+        <div className="no-print hidden md:flex h-16 bg-white border-b border-slate-200 items-center justify-between px-8 flex-none">
+          <div className="min-w-0 pr-4 flex-1">
+            <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2 truncate">
+              <span className="truncate">{isRevisionMode ? "Revision Plan" : units[0].topicTitle}</span>
+              {activeSection === 'educational' && selectedResourceId && (
+                <span className="text-slate-400 font-normal truncate flex-shrink-0">
+                  / {[...worksheets, ...assignments, ...tests].find(r => r.id === selectedResourceId)?.title}
+                </span>
+              )}
+            </h1>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {activeSection === 'educational' && (
+              <div className="flex bg-slate-100 p-1 rounded-lg mr-4 flex-shrink-0">
+                <button onClick={() => setResourceViewMode('content')} className={`px-3 py-1 text-xs font-bold rounded-md ${resourceViewMode === 'content' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Content</button>
+                <button onClick={() => setResourceViewMode('memo')} className={`px-3 py-1 text-xs font-bold rounded-md ${resourceViewMode === 'memo' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500'}`}>Memo</button>
+              </div>
+            )}
+            <button onClick={() => setIsTemplateModalOpen(true)} aria-label="Document settings" className="p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Settings className="w-5 h-5" /></button>
+            <button onClick={() => setIsChatOpen(!isChatOpen)} aria-label="AI assistant" className={`p-2 rounded-lg transition-colors flex-shrink-0 ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="w-5 h-5" /></button>
+            {downloadMenu}
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 md:p-12 relative bg-slate-100">
-          <div className="mx-auto min-h-[1000px] bg-white md:shadow-xl md:rounded-xl overflow-hidden print:shadow-none print:rounded-none">
+        <div ref={contentScrollRef} onScroll={handleContentScroll} className="flex-1 overflow-y-auto pt-12 md:pt-0 md:p-12 relative bg-slate-100">
+          <div className="mx-auto min-h-full md:min-h-[1000px] bg-white md:shadow-xl md:rounded-xl overflow-hidden print:shadow-none print:rounded-none">
             {loading && (
               <div className="absolute inset-0 bg-white/90 z-50 flex flex-col items-center justify-center">
                 <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
                 <p className="text-slate-500 font-medium">Drafting content...</p>
               </div>
             )}
-            <div className={`p-5 md:p-12 lg:p-16 print:p-0 ${isRefining ? 'is-refining' : ''}`}>
+            <div className={`px-4 py-4 md:p-12 lg:p-16 print:p-0 ${isRefining ? 'is-refining' : ''}`}>
+              {activeSection === 'educational' && (
+                <div className="md:hidden flex bg-slate-100 p-1 rounded-lg mb-4 w-fit">
+                  <button onClick={() => setResourceViewMode('content')} className={`px-4 py-2 text-xs font-bold rounded-md ${resourceViewMode === 'content' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Content</button>
+                  <button onClick={() => setResourceViewMode('memo')} className={`px-4 py-2 text-xs font-bold rounded-md ${resourceViewMode === 'memo' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500'}`}>Memo</button>
+                </div>
+              )}
               <DocumentHeader />
               {activeSection === 'plan' && (lessonPlan ? <div className="markdown-body"><RenderMarkdown docType="teacher">{lessonPlan}</RenderMarkdown></div> : <EmptyState icon={BookOpen} label="Lesson Plan" action={() => handleGenerateMain('plan')} />)}
               {activeSection === 'slides' && (slides ? <div className="markdown-body"><RenderMarkdown docType="teacher">{slides}</RenderMarkdown></div> : <EmptyState icon={MonitorPlay} label="Slide Outline" action={() => handleGenerateMain('slides')} />)}

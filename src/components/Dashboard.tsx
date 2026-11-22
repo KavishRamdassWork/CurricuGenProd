@@ -257,9 +257,9 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden flex">
-      {/* Mobile top bar */}
-      <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-slate-900 flex items-center px-4 z-40 shadow-lg">
+    <div className="h-dvh md:h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden flex">
+      {/* Mobile top bar (the workspace has its own bar, so hide this one there) */}
+      <div className={`${appState === AppState.LESSON_VIEW ? 'hidden' : 'md:hidden'} fixed top-0 left-0 right-0 h-14 bg-slate-900 flex items-center px-4 z-40 shadow-lg`}>
         <button
           onClick={() => setIsMobileNavOpen(true)}
           className="min-w-12 min-h-12 flex items-center justify-center text-white -ml-2"
@@ -276,7 +276,7 @@ const Dashboard = () => {
       </div>
 
       {/* Sidebar */}
-      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 ${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'} bg-slate-900 text-slate-300 flex flex-col transition-transform md:transition-all duration-300 ease-in-out shadow-2xl flex-none ${isMobileNavOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0`}>
+      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 ${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'} bg-slate-900 text-slate-300 flex flex-col transition-transform md:transition-all duration-300 ease-in-out md:shadow-2xl flex-none ${isMobileNavOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} md:translate-x-0`}>
         <div className="h-16 flex items-center px-5 border-b border-slate-800">
           <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center w-full' : ''}`}>
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white flex-shrink-0">
@@ -339,7 +339,7 @@ const Dashboard = () => {
       )}
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50 pt-14 md:pt-0">
+      <div className={`flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50 ${appState === AppState.LESSON_VIEW ? 'pt-0' : 'pt-14'} md:pt-0`}>
         <div className="flex-1 overflow-hidden relative">
           {appState === AppState.CLASS_LIST && (
             <ClassManager
