@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { WeekUnit, UploadedFile, ChatMessage, EducationalResource, TemplateConfig, Classroom, LessonContent } from '@/lib/types';
 import { computeSettingsHash } from '@/lib/classHash';
+import { useAutoCollapse } from '@/lib/useAutoCollapse';
 import { generateLessonPlan, generatePresentation, generateWorksheet, generateAssignment, generateAssessment, generateMemo, generateGame, generateResources, refineContent, generateEducationalImage } from '@/lib/gemini';
 import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, Download, ChevronDown, AlertTriangle, LucideIcon } from 'lucide-react';
 
@@ -52,6 +53,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   const [tests, setTests] = useState<EducationalResource[]>([]);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSectionMenuOpen, setIsMobileSectionMenuOpen] = useState(false);
+  useAutoCollapse(setIsSidebarCollapsed);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [loading, setLoading] = useState<boolean>(false);
   const [templateConfig, setTemplateConfig] = useState<TemplateConfig>({ schoolName: '', logo: null, font: 'modern', layout: 'standard' });
@@ -482,7 +484,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         </div>
       </aside>
 
-      <div className="md:hidden relative border-b border-slate-200 bg-white">
+      <div className="no-print md:hidden relative border-b border-slate-200 bg-white">
         <button
           onClick={() => setIsMobileSectionMenuOpen(prev => !prev)}
           className="w-full min-h-12 flex items-center justify-between px-4 font-bold text-slate-800"
@@ -515,7 +517,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       </div>
 
       {/* MAIN DOCUMENT AREA */}
-      <main className="flex-1 min-h-0 min-w-0 flex flex-col md:h-full relative overflow-hidden">
+      <main className="flex-1 min-h-0 min-w-0 flex flex-col md:h-full relative isolate overflow-hidden">
         <div className="no-print h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-none">
           <div className="min-w-0 pr-4 flex-1">
             <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2 truncate">
@@ -619,7 +621,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-2 md:p-12 relative bg-slate-100">
+        <div className="flex-1 overflow-y-auto p-2 md:p-6 xl:p-12 relative bg-slate-100">
           <div className="mx-auto min-h-[1000px] bg-white md:shadow-xl md:rounded-xl overflow-hidden print:shadow-none print:rounded-none">
             {loading && (
               <div className="absolute inset-0 bg-white/90 z-50 flex flex-col items-center justify-center">
@@ -627,7 +629,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                 <p className="text-slate-500 font-medium">Drafting content...</p>
               </div>
             )}
-            <div className={`p-5 md:p-12 lg:p-16 print:p-0 ${isRefining ? 'is-refining' : ''}`}>
+            <div className={`p-5 md:p-10 xl:p-16 print:p-0 ${isRefining ? 'is-refining' : ''}`}>
               <DocumentHeader />
               {activeSection === 'plan' && (lessonPlan ? <div className="markdown-body"><RenderMarkdown docType="teacher">{lessonPlan}</RenderMarkdown></div> : <EmptyState icon={BookOpen} label="Lesson Plan" action={() => handleGenerateMain('plan')} />)}
               {activeSection === 'slides' && (slides ? <div className="markdown-body"><RenderMarkdown docType="teacher">{slides}</RenderMarkdown></div> : <EmptyState icon={MonitorPlay} label="Slide Outline" action={() => handleGenerateMain('slides')} />)}
@@ -789,7 +791,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
 
       {/* AI CHAT SIDEBAR */}
       {isChatOpen && (
-        <aside className="no-print w-96 bg-white border-l border-slate-200 shadow-2xl z-30 flex flex-col">
+        <aside className="no-print absolute inset-y-0 right-0 xl:static w-96 max-w-full bg-white border-l border-slate-200 shadow-2xl z-30 flex flex-col">
           <div className="h-16 border-b border-slate-100 flex items-center px-6 bg-slate-50/50 justify-between">
             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Sparkles className="w-4 h-4 text-blue-600" /> AI Assistant</h3>
             <button onClick={() => setIsChatOpen(false)}><X className="w-4 h-4 text-slate-400" /></button>
@@ -1010,7 +1012,7 @@ const RenderMarkdown = ({
         table: ({ node: _node, ...props }) => (
           <div className="overflow-x-auto my-6">
             <table
-              className="min-w-full text-xs md:text-sm divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden"
+              className="min-w-full text-xs md:text-sm print:text-sm divide-y divide-slate-200 border border-slate-200 rounded-lg overflow-hidden"
               {...props}
             />
           </div>

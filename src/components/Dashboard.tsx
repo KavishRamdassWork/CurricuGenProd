@@ -7,6 +7,7 @@ import CurriculumDashboard from '@/components/CurriculumDashboard';
 import LessonWorkspace from '@/components/LessonWorkspace';
 import { Blueprint, WeekUnit, AppState, Classroom, LessonContent } from '@/lib/types';
 import { computeSettingsHash } from '@/lib/classHash';
+import { useAutoCollapse } from '@/lib/useAutoCollapse';
 import { Sparkles, Users, LayoutDashboard, Loader2, Menu, Zap, Crown, LucideIcon } from 'lucide-react';
 
 interface DbUser {
@@ -26,6 +27,7 @@ const Dashboard = () => {
   const [isDbLoading, setIsDbLoading] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  useAutoCollapse(setIsSidebarCollapsed);
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
   const [editingClass, setEditingClass] = useState<Classroom | null>(null);
 

@@ -68,7 +68,7 @@ body {
   font-size: 1.25rem;
 }
 
-@media (min-width: 768px) {
+@media print, (min-width: 768px) {
   .markdown-body {
     line-height: 1.8;
     font-size: 1.05rem;
@@ -147,7 +147,7 @@ body {
   padding: 0.5rem;
   border-bottom: 1px solid #f1f5f9; /* Slate 100 */
 }
-@media (min-width: 768px) {
+@media print, (min-width: 768px) {
   .markdown-body th {
     padding: 1rem;
     font-size: 0.875rem;
