@@ -1,7 +1,10 @@
-import { GoogleGenAI, Type, Part } from "@google/genai";
+import { Type, Part } from "@google/genai";
 import { Blueprint, WeekUnit, UploadedFile, Student, ClassAnalysis, Classroom } from "@/lib/types";
 import { Pinecone } from '@pinecone-database/pinecone';
 import { getPhaseForGrade } from './curriculumHelper';
+import { GENERATION_MODEL, getAIClient } from '@/lib/modelRunner';
+
+export { getAIClient } from '@/lib/modelRunner';
 
 // Lazy initialization of Pinecone to avoid build-time errors if API key is missing
 let pc: Pinecone | null = null;
@@ -22,16 +25,7 @@ You are EDU-MASTER, a world-class educational content specialist.
 Your goal is to provide structured, curriculum-aligned content.
 `;
 
-// ─── Model Configuration ────────────────────────────────────────────────────
-// Update GENERATION_MODEL here when Google announces a deprecation.
-// Check: ai.google.dev/gemini-api/docs/deprecations
-//
-// History:
-//   gemini-2.0-flash     → deprecated/retired June 1 2026
-//   gemini-2.5-flash     → deprecated October 16 2026
-//   gemini-3.5-flash     → active as of May 19 2026, no announced deprecation
-//                           Pricing: $1.50 input / $9.00 output per 1M tokens
-const GENERATION_MODEL = 'gemini-3.5-flash';
+// Model names and the Gemini client live in modelRunner.ts.
 const EMBEDDING_MODEL  = 'text-embedding-004';      // stable, no announced deprecation
 const IMAGE_MODEL      = 'imagen-4-fast-generate-001'; // upgraded from imagen-3, $0.02/image
 
@@ -39,21 +33,6 @@ const IMAGE_MODEL      = 'imagen-4-fast-generate-001'; // upgraded from imagen-3
 // Enabled only for high-accuracy tasks (blueprint, formal assessment) where quality
 // matters more than the small extra cost (~$0.018 per call at $9/1M output).
 const THINKING_BUDGET_HIGH = 2048;
-
-/** Per-request ceiling for Gemini calls (ms). Routes declare maxDuration = 120 s to leave room for one retry. */
-const GEMINI_REQUEST_TIMEOUT_MS = 55_000;
-
-export function getAIClient() {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) throw new Error("GEMINI_API_KEY is not configured on the server.");
-  // Bound every upstream call. Without a timeout a hung Gemini request holds the route (and the
-  // user's reserved credit) until the platform kills it. Two attempts total: one retry absorbs a
-  // transient 429/503 without multiplying worst-case latency, and stays inside GENERATION_MAX_SECONDS.
-  return new GoogleGenAI({
-    apiKey,
-    httpOptions: { timeout: GEMINI_REQUEST_TIMEOUT_MS, retryOptions: { attempts: 2 } },
-  });
-}
 
 /** Sanitize user input to prevent prompt injection */
 export function sanitizeInput(input: string, maxLength = 1000): string {
