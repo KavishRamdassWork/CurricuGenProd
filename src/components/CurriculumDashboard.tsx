@@ -182,7 +182,7 @@ const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, ac
                           ) : (
                              <div 
                                onClick={() => !isEditing && toggleSelection(index)}
-                               className="p-8 cursor-pointer flex flex-col md:flex-row gap-8 items-start relative z-10"
+                               className="p-5 md:p-8 cursor-pointer flex flex-col md:flex-row gap-5 md:gap-8 items-start relative z-10"
                              >
                                 <div className="flex-1">
                                    <h3 className="text-2xl font-extrabold text-slate-900 mb-3 group-hover:text-blue-700 transition-colors tracking-tight">{unit.topicTitle}</h3>
@@ -219,18 +219,18 @@ const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, ac
 
       {/* Floating Bulk Action Dock */}
       {selectedWeekIndices.length > 0 && (
-         <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-slate-900/95 backdrop-blur-xl text-white px-8 py-4 rounded-full shadow-2xl shadow-slate-900/30 flex items-center gap-8 animate-in slide-in-from-bottom-10 duration-500 z-50 border border-slate-700/50">
-            <div className="flex items-center gap-4">
+         <div className="absolute bottom-6 md:bottom-10 left-1/2 -translate-x-1/2 max-w-[calc(100%-1.5rem)] bg-slate-900/95 backdrop-blur-xl text-white px-4 md:px-8 py-3 md:py-4 rounded-full shadow-2xl shadow-slate-900/30 flex items-center gap-3 md:gap-8 animate-in slide-in-from-bottom-10 duration-500 z-50 border border-slate-700/50">
+            <div className="flex items-center gap-2 md:gap-4">
                <div className="bg-blue-500 text-white font-extrabold w-8 h-8 rounded-full flex items-center justify-center shadow-inner shadow-blue-400">{selectedWeekIndices.length}</div>
                <div className="flex flex-col">
                   <span className="font-bold text-sm leading-none">Weeks Selected</span>
-                  <span className="text-[10px] text-slate-400 uppercase tracking-wider mt-1">Ready for workspace</span>
+                  <span className="hidden md:block text-[10px] text-slate-400 uppercase tracking-wider mt-1">Ready for workspace</span>
                </div>
             </div>
             <div className="h-8 w-px bg-slate-700" />
             <button 
               onClick={handleOpenSelected}
-              className="flex items-center gap-3 text-sm font-extrabold text-blue-400 hover:text-white transition-colors bg-blue-500/10 hover:bg-blue-500/20 px-6 py-2.5 rounded-full"
+              className="flex items-center gap-3 text-sm font-extrabold text-blue-400 hover:text-white transition-colors bg-blue-500/10 hover:bg-blue-500/20 px-4 md:px-6 py-2.5 rounded-full whitespace-nowrap"
             >
                Open Workspace <ArrowRight className="w-4 h-4" />
             </button>

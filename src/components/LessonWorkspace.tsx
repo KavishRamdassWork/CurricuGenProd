@@ -423,7 +423,9 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   };
 
   return (
-    <div className="flex h-full bg-slate-100 overflow-hidden relative">
+    <div className="flex flex-col md:flex-row h-full bg-slate-100 overflow-hidden relative">
+      {/* Single shared file input for "Add Context" (desktop sidebar + mobile bar) */}
+      <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
       {/* LEFT TOOLBAR */}
       <aside className={`no-print hidden md:flex bg-white border-r border-slate-200 flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
         <div className="h-16 border-b border-slate-100 flex items-center px-4 gap-3">
@@ -436,7 +438,6 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
               <div onClick={() => fileInputRef.current?.click()} className="cursor-pointer flex flex-col items-center text-center">
                 <Upload className="w-5 h-5 text-slate-400 mb-1" />
                 {!isSidebarCollapsed && <span className="text-xs font-bold text-slate-500">Add Context PDF</span>}
-                <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
               </div>
             ) : (
               <div className="flex items-center justify-between">
@@ -482,24 +483,55 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         </div>
       </aside>
 
-      <div className="md:hidden relative border-b border-slate-200 bg-white">
+      <div className="no-print md:hidden relative flex-none flex items-center border-b border-slate-200 bg-white z-30">
+        <button
+          onClick={onBack}
+          aria-label="Back"
+          className="w-12 min-h-12 flex items-center justify-center text-slate-500 flex-shrink-0"
+        >
+          <ArrowLeft className="w-5 h-5" />
+        </button>
         <button
           onClick={() => setIsMobileSectionMenuOpen(prev => !prev)}
-          className="w-full min-h-12 flex items-center justify-between px-4 font-bold text-slate-800"
+          className="flex-1 min-w-0 min-h-12 flex items-center justify-between pr-2 font-bold text-slate-800"
         >
-          <span className="flex items-center gap-2">
+          <span className="flex items-center gap-2 min-w-0">
             {(() => {
+              if (activeSection === 'educational') {
+                const res = [...worksheets, ...assignments, ...tests].find(r => r.id === selectedResourceId);
+                return <><FileText className="w-4 h-4 flex-shrink-0" /> <span className="truncate">{res?.title ?? 'Resource'}</span></>;
+              }
               const current = MOBILE_SECTIONS.find(s => s.key === activeSection);
               const Icon = current?.icon ?? BookOpen;
-              return <><Icon className="w-4 h-4" /> {current?.label ?? 'Lesson Plan'}</>;
+              return <><Icon className="w-4 h-4 flex-shrink-0" /> <span className="truncate">{current?.label ?? 'Lesson Plan'}</span></>;
             })()}
           </span>
-          <ChevronDown className={`w-4 h-4 transition-transform ${isMobileSectionMenuOpen ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`w-4 h-4 flex-shrink-0 transition-transform ${isMobileSectionMenuOpen ? 'rotate-180' : ''}`} />
+        </button>
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          aria-label={attachedFile ? `Context attached: ${attachedFile.name}` : 'Add context PDF'}
+          className={`w-12 min-h-12 flex items-center justify-center flex-shrink-0 ${attachedFile ? 'text-blue-600' : 'text-slate-500'}`}
+        >
+          {attachedFile ? <Paperclip className="w-5 h-5" /> : <Upload className="w-5 h-5" />}
+        </button>
+        <button
+          onClick={() => { setCreationType('worksheet'); setIsCreationModalOpen(true); }}
+          aria-label="New worksheet, assignment or test"
+          className="w-12 min-h-12 flex items-center justify-center text-blue-600 flex-shrink-0"
+        >
+          <Plus className="w-5 h-5" />
         </button>
         {isMobileSectionMenuOpen && (
           <>
             <div className="fixed inset-0 z-20" onClick={() => setIsMobileSectionMenuOpen(false)} />
-            <div className="absolute left-0 right-0 top-full bg-white border-b border-slate-200 shadow-lg z-30">
+            <div className="absolute left-0 right-0 top-full max-h-[70vh] overflow-y-auto bg-white border-b border-slate-200 shadow-lg z-30">
+              {attachedFile && (
+                <div className="flex items-center justify-between gap-2 px-4 min-h-12 bg-blue-50 text-blue-700 text-sm">
+                  <span className="flex items-center gap-2 min-w-0"><Paperclip className="w-4 h-4 flex-shrink-0" /><span className="truncate">{attachedFile.name}</span></span>
+                  <button onClick={() => setAttachedFile(null)} aria-label="Remove context file" className="w-10 h-10 flex items-center justify-center flex-shrink-0"><X className="w-4 h-4" /></button>
+                </div>
+              )}
               {MOBILE_SECTIONS.map(({ key, label, icon: Icon }) => (
                 <button
                   key={key}
@@ -509,6 +541,23 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                   <Icon className="w-4 h-4" /> {label}
                 </button>
               ))}
+              {[...worksheets, ...assignments, ...tests].length > 0 && (
+                <div className="border-t border-slate-100">
+                  <div className="px-4 pt-3 pb-1 text-xs font-bold text-slate-400 uppercase">Resources</div>
+                  {[...worksheets, ...assignments, ...tests].map(r => (
+                    <button
+                      key={r.id}
+                      onClick={() => { setActiveSection('educational'); setSelectedResourceId(r.id); setIsMobileSectionMenuOpen(false); }}
+                      className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${selectedResourceId === r.id && activeSection === 'educational' ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
+                    >
+                      {r.type === 'worksheet' && <FileText className="w-4 h-4 flex-shrink-0" />}
+                      {r.type === 'assignment' && <ClipboardList className="w-4 h-4 flex-shrink-0" />}
+                      {r.type === 'test' && <HelpCircle className="w-4 h-4 flex-shrink-0" />}
+                      <span className="truncate">{r.title}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -516,9 +565,9 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
 
       {/* MAIN DOCUMENT AREA */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
-        <div className="no-print h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-none">
-          <div className="min-w-0 pr-4 flex-1">
-            <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2 truncate">
+        <div className="no-print h-14 md:h-16 bg-white border-b border-slate-200 flex items-center justify-between px-3 md:px-8 flex-none">
+          <div className="min-w-0 pr-2 md:pr-4 flex-1">
+            <h1 className={`text-base md:text-lg font-bold text-slate-900 items-center gap-2 truncate ${activeSection === 'educational' ? 'hidden md:flex' : 'flex'}`}>
               <span className="truncate">{isRevisionMode ? "Revision Plan" : units[0].topicTitle}</span>
               {activeSection === 'educational' && selectedResourceId && (
                 <span className="text-slate-400 font-normal truncate flex-shrink-0">
@@ -527,21 +576,22 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
               )}
             </h1>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
             {activeSection === 'educational' && (
-              <div className="flex bg-slate-100 p-1 rounded-lg mr-4 flex-shrink-0">
-                <button onClick={() => setResourceViewMode('content')} className={`px-3 py-1 text-xs font-bold rounded-md ${resourceViewMode === 'content' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Content</button>
-                <button onClick={() => setResourceViewMode('memo')} className={`px-3 py-1 text-xs font-bold rounded-md ${resourceViewMode === 'memo' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500'}`}>Memo</button>
+              <div className="flex bg-slate-100 p-1 rounded-lg mr-1 md:mr-4 flex-shrink-0">
+                <button onClick={() => setResourceViewMode('content')} className={`px-2 md:px-3 py-1.5 md:py-1 text-xs font-bold rounded-md ${resourceViewMode === 'content' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Content</button>
+                <button onClick={() => setResourceViewMode('memo')} className={`px-2 md:px-3 py-1.5 md:py-1 text-xs font-bold rounded-md ${resourceViewMode === 'memo' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500'}`}>Memo</button>
               </div>
             )}
-            <button onClick={() => setIsTemplateModalOpen(true)} className="hidden md:inline-flex p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Settings className="w-5 h-5" /></button>
-            <button onClick={() => setIsChatOpen(!isChatOpen)} className={`hidden md:inline-flex p-2 rounded-lg transition-colors flex-shrink-0 ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="w-5 h-5" /></button>
+            <button onClick={() => setIsTemplateModalOpen(true)} aria-label="Document settings" className="p-2.5 md:p-2 text-slate-500 hover:bg-slate-100 rounded-lg flex-shrink-0"><Settings className="w-5 h-5" /></button>
+            <button onClick={() => setIsChatOpen(!isChatOpen)} aria-label="AI assistant" className={`p-2.5 md:p-2 rounded-lg transition-colors flex-shrink-0 ${isChatOpen ? 'bg-blue-100 text-blue-600' : 'text-slate-500 hover:bg-slate-100'}`}><MessageSquare className="w-5 h-5" /></button>
             {/* Download Dropdown */}
             <div className="relative flex-shrink-0">
               <button
                 onClick={() => setIsDownloadOpen(prev => !prev)}
                 disabled={isDownloadLoading}
-                className="flex items-center gap-1.5 px-3 py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+                aria-label="Download"
+                className="flex items-center gap-1.5 px-3 py-2.5 md:py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
               >
                 {isDownloadLoading
                   ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
@@ -645,7 +695,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                         className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl h-28 resize-none focus:bg-white outline-none focus:ring-2 focus:ring-blue-500/20 text-sm"
                       />
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
                       <button
                         onClick={handleGenerateImage}
                         disabled={loading || imagesLeft <= 0}
@@ -672,7 +722,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                           alt="Generated visual aid"
                           className="w-full rounded-xl border border-slate-200 shadow-sm"
                         />
-                        <div className="flex gap-3">
+                        <div className="flex flex-wrap gap-3">
                           <button
                             onClick={() => handleImageDownload(
                               generatedImageUrl,
@@ -789,12 +839,12 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
 
       {/* AI CHAT SIDEBAR */}
       {isChatOpen && (
-        <aside className="no-print w-96 bg-white border-l border-slate-200 shadow-2xl z-30 flex flex-col">
-          <div className="h-16 border-b border-slate-100 flex items-center px-6 bg-slate-50/50 justify-between">
+        <aside className="no-print fixed inset-0 z-[60] w-full md:static md:inset-auto md:z-30 md:w-96 bg-white border-l border-slate-200 shadow-2xl flex flex-col">
+          <div className="h-14 md:h-16 border-b border-slate-100 flex items-center px-4 md:px-6 bg-slate-50/50 justify-between flex-none">
             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Sparkles className="w-4 h-4 text-blue-600" /> AI Assistant</h3>
-            <button onClick={() => setIsChatOpen(false)}><X className="w-4 h-4 text-slate-400" /></button>
+            <button onClick={() => setIsChatOpen(false)} aria-label="Close assistant" className="w-11 h-11 -mr-2 md:w-auto md:h-auto md:mr-0 flex items-center justify-center"><X className="w-5 h-5 md:w-4 md:h-4 text-slate-400" /></button>
           </div>
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
             {chatHistory.length === 0 && (<div className="text-center text-slate-400 text-sm py-10"><Bot className="w-8 h-8 mx-auto mb-2 opacity-50" /><p>Ask me to refine, shorten, or expand the current document.</p></div>)}
             {chatHistory.map((msg) => (
               <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
@@ -806,10 +856,10 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
             ))}
             <div ref={chatEndRef} />
           </div>
-          <div className="p-4 border-t border-slate-100">
+          <div className="p-4 border-t border-slate-100 flex-none">
             <form onSubmit={handleRefine} className="relative">
-              <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Make it shorter..." className="w-full pl-4 pr-12 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" />
-              <button type="submit" disabled={isRefining || !chatInput} className="absolute right-2 top-2 p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"><Send className="w-4 h-4" /></button>
+              <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Make it shorter..." className="w-full pl-4 pr-14 md:pr-12 py-3 text-base bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" />
+              <button type="submit" disabled={isRefining || !chatInput} className="absolute right-1.5 top-1.5 p-2.5 md:right-2 md:top-2 md:p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"><Send className="w-4 h-4" /></button>
             </form>
           </div>
         </aside>
@@ -818,16 +868,16 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       {/* CREATION MODAL */}
       {isCreationModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <div className="flex gap-3">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex flex-wrap gap-2 md:gap-3">
                 {(['worksheet', 'assignment', 'test'] as ResourceType[]).map(t => (
                   <button key={t} onClick={() => setCreationType(t)} className={`px-3 py-1.5 rounded-lg text-sm font-bold capitalize ${creationType === t ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>{t}</button>
                 ))}
               </div>
               <button onClick={() => setIsCreationModalOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-4 md:p-6 space-y-4">
               {creationType === 'test' && (
                 <div className="border rounded-lg p-3 max-h-32 overflow-y-auto bg-slate-50">
                   <label className="text-xs font-bold text-slate-500 uppercase block mb-2">Scope</label>
@@ -841,7 +891,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
               )}
               <textarea value={creationInstruction} onChange={e => setCreationInstruction(e.target.value)} placeholder="Specific instructions..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl h-32 resize-none focus:bg-white outline-none focus:ring-2 focus:ring-blue-500/20" />
             </div>
-            <div className="p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
+            <div className="p-4 md:p-6 bg-slate-50 border-t border-slate-100 flex justify-end gap-3">
               <button onClick={() => setIsCreationModalOpen(false)} className="px-4 py-2 font-bold text-slate-500 hover:bg-slate-200 rounded-lg">Cancel</button>
               <button onClick={handleAddResource} className="px-6 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 shadow-lg shadow-blue-500/20">Generate</button>
             </div>
@@ -852,12 +902,12 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       {/* TEMPLATE MODAL */}
       {isTemplateModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="p-6 border-b border-slate-100 bg-slate-50 flex justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-4 md:p-6 border-b border-slate-100 bg-slate-50 flex justify-between">
               <h3 className="font-bold text-slate-800">Document Settings</h3>
               <button onClick={() => setIsTemplateModalOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
             </div>
-            <div className="p-6 space-y-6">
+            <div className="p-4 md:p-6 space-y-6">
               <div>
                 <label className="text-xs font-bold text-slate-500 uppercase mb-2 block">School Logo</label>
                 <div className="flex gap-4">
@@ -896,11 +946,10 @@ interface EmptyStateProps {
 }
 
 const EmptyState = ({ icon: Icon, label, action }: EmptyStateProps) => (
-  <div className="flex flex-col items-center justify-center py-32 text-center opacity-60 hover:opacity-100 transition-opacity">
+  <div className="flex flex-col items-center justify-center py-20 md:py-32 text-center opacity-60 hover:opacity-100 transition-opacity">
     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4"><Icon className="w-8 h-8 text-slate-300" /></div>
     <h3 className="text-xl font-bold text-slate-700 mb-2">No {label}</h3>
-    <button onClick={action} className="hidden md:flex items-center gap-2 text-blue-600 font-bold hover:underline"><Sparkles className="w-4 h-4" /> Generate Now</button>
-    <p className="md:hidden text-sm text-slate-500 max-w-xs px-6">Content generation works best on desktop — open this class on a computer to create new content.</p>
+    <button onClick={action} className="flex items-center gap-2 min-h-12 px-4 md:min-h-0 md:px-0 text-blue-600 font-bold hover:underline"><Sparkles className="w-4 h-4" /> Generate Now</button>
   </div>
 );
 

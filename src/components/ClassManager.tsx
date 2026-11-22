@@ -407,18 +407,18 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
                )}
 
                {/* Footer */}
-               <div className="mt-10 pt-6 border-t border-slate-100 flex gap-4 justify-end">
+               <div className="mt-10 pt-6 border-t border-slate-100 flex flex-wrap gap-2 sm:gap-4 justify-end">
                  {wizardStep === 1 ? (
                     <>
-                       <button type="button" onClick={() => { setIsModalOpen(false); onCloseEdit?.(); }} className="px-8 py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Cancel</button>
-                       <button type="button" onClick={() => { setWizardStep(2); setStepChangeTime(Date.now()); }} disabled={!name || !subject || !grade} className="px-10 py-4 rounded-full bg-blue-600 text-white font-extrabold shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
+                       <button type="button" onClick={() => { setIsModalOpen(false); onCloseEdit?.(); }} className="px-5 sm:px-8 py-3 sm:py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Cancel</button>
+                       <button type="button" onClick={() => { setWizardStep(2); setStepChangeTime(Date.now()); }} disabled={!name || !subject || !grade} className="px-6 sm:px-10 py-3 sm:py-4 rounded-full bg-blue-600 text-white font-extrabold shadow-xl shadow-blue-600/20 hover:bg-blue-700 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
                           Next Step <ArrowRight className="w-5 h-5" />
                        </button>
                     </>
                  ) : (
                     <>
-                       <button type="button" onClick={() => setWizardStep(1)} className="px-8 py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Back</button>
-                       <button type="submit" disabled={isCreating} className="px-10 py-4 rounded-full bg-slate-900 text-white font-extrabold shadow-xl shadow-slate-900/20 hover:bg-slate-800 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
+                       <button type="button" onClick={() => setWizardStep(1)} className="px-5 sm:px-8 py-3 sm:py-4 rounded-full text-slate-500 font-bold hover:bg-slate-50 transition-colors">Back</button>
+                       <button type="submit" disabled={isCreating} className="px-6 sm:px-10 py-3 sm:py-4 rounded-full bg-slate-900 text-white font-extrabold shadow-xl shadow-slate-900/20 hover:bg-slate-800 hover:-translate-y-0.5 transition-all flex items-center gap-2 disabled:opacity-50">
                           {isCreating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Sparkles className="w-5 h-5" />} {editingClass ? 'Save Changes' : 'Create Workspace'} <ArrowRight className="w-5 h-5" />
                        </button>
                     </>
@@ -434,7 +434,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
         <div className="fixed inset-0 z-[100] flex justify-end">
           <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-opacity" onClick={() => setActiveAnalysisClassId(null)} />
           <div className="relative w-full max-w-2xl bg-white/95 backdrop-blur-3xl shadow-2xl h-full flex flex-col animate-in slide-in-from-right duration-500 border-l border-white">
-            <div className="p-8 border-b border-slate-100 flex justify-between items-center bg-white/50 backdrop-blur-md sticky top-0 z-10">
+            <div className="p-5 md:p-8 border-b border-slate-100 flex justify-between items-center bg-white/50 backdrop-blur-md sticky top-0 z-10">
                <div>
                   <h2 className="text-2xl font-extrabold text-slate-900 tracking-tight">Intelligence Hub</h2>
                   <p className="font-medium text-slate-500">{activeAnalysisClass.name}</p>
@@ -442,9 +442,9 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
                <button title="Close Analytics" onClick={() => setActiveAnalysisClassId(null)} className="p-3 hover:bg-slate-100 rounded-full transition-colors"><X className="w-5 h-5 text-slate-500" /></button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-8 space-y-10 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-5 md:p-8 space-y-10 custom-scrollbar">
                {/* Quick Actions */}
-               <div className="grid grid-cols-2 gap-6">
+               <div className="grid grid-cols-2 gap-3 md:gap-6">
                   <button onClick={handleDownloadTemplate} className="p-6 rounded-2xl bg-white border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 shadow-sm hover:shadow-md hover:-translate-y-1 transition-all text-left flex flex-col justify-center items-start group">
                      <div className="w-12 h-12 bg-blue-100/50 rounded-xl flex items-center justify-center mb-4 group-hover:bg-blue-600 transition-colors">
                         <Download className="w-6 h-6 text-blue-600 group-hover:text-white transition-colors" />
