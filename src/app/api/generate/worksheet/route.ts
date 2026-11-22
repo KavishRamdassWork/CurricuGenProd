@@ -4,11 +4,11 @@ import { requireGenerationAccess } from '@/lib/authGuard';
 import { handleGenerationError } from '@/lib/generationErrors';
 import { auditPromptInputs } from '@/lib/promptSafety';
 import { z } from 'zod';
-import { classroomInputSchema, unitSchema, uploadedFileSchema } from '@/lib/requestSchemas';
+import { classroomInputSchema, unitSchema, uploadedFileSchema, worksheetTypeSchema } from '@/lib/requestSchemas';
 
 const schema = z.object({
   classroom: classroomInputSchema, unit: unitSchema,
-  type: z.string().max(50).default('Standard'),
+  type: worksheetTypeSchema,
   file: uploadedFileSchema.optional(),
   userInstruction: z.string().max(300).optional(),
 });

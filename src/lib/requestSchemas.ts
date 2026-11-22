@@ -39,3 +39,10 @@ export const classroomInputSchema = z.object({
   accommodations: z.string().max(5000).nullish().transform((v) => v ?? undefined),
   studentInterests: z.string().max(5000).nullish().transform((v) => v ?? undefined),
 }) as unknown as z.ZodType<Classroom>;
+
+/**
+ * Worksheet type. The client only ever sends "Standard", and the value is printed into the prompt and the
+ * worksheet heading, so it is an allow-list rather than free text. Add a value here when the UI offers one.
+ */
+export const WORKSHEET_TYPES = ['Standard'] as const;
+export const worksheetTypeSchema = z.enum(WORKSHEET_TYPES).default('Standard');
