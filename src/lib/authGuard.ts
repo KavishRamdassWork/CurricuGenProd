@@ -7,7 +7,8 @@ import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import buildRateLimit from '@/lib/rateLimit';
-import { reserveGenerationCredit, refundGenerationCredit, reserveImageCredit, refundImageCredit } from '@/lib/generationCredits';
+import { reserveGenerationCredit, reserveImageCredit, refundImageCredit } from '@/lib/generationCredits';
+import { pickPrimaryVerifiedEmail } from '@/lib/clerkEmail';
 import { ensureDbUser, type ClerkProfile } from '@/lib/ensureUser';
 import { lapseExpiredPro } from '@/lib/proExpiry';
 import { effectivePlan } from '@/lib/plans';
@@ -24,7 +25,8 @@ async function clerkProfile(clerkId: string): Promise<ClerkProfile> {
     if (user && user.id === clerkId) {
       return {
         clerkId,
-        email: user.emailAddresses?.[0]?.emailAddress,
+        // Verified primary address only (beta is keyed on it); null falls back to the placeholder.
+        email: pickPrimaryVerifiedEmail(user.emailAddresses, user.primaryEmailAddressId),
         name: [user.firstName, user.lastName].filter(Boolean).join(' ') || null,
         imageUrl: user.imageUrl,
       };
@@ -103,15 +105,6 @@ export async function requireGenerationAccess(): Promise<GuardResult> {
 
   // Routes see the effective plan, not the stored one.
   return { ok: true, dbUser: { ...dbUser, plan, generationsLeft: remaining } };
-}
-
-/**
- * Return the credit reserved by requireGenerationAccess() when the generation failed. Every plan
- * reserves, so every plan is refunded; `plan` is kept only for call-site compatibility.
- */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function refundGeneration(userId: string, plan?: string) {
-  await refundGenerationCredit(userId);
 }
 
 /**

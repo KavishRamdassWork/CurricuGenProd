@@ -3,6 +3,7 @@ import { Webhook } from 'svix';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { placeholderEmail } from '@/lib/ensureUser';
+import { clerkWebhookProfile } from '@/lib/clerkEmail';
 
 export async function POST(req: NextRequest) {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -40,9 +41,12 @@ export async function POST(req: NextRequest) {
 
   try {
     if (evt.type === 'user.created') {
-      const { id, email_addresses, first_name, last_name, image_url } = evt.data;
-      const email = email_addresses[0]?.email_address;
-      const name = [first_name, last_name].filter(Boolean).join(' ') || email;
+      const { id } = evt.data;
+      // Only a verified primary address is stored: beta access is keyed on it (see clerkEmail.ts).
+      const profile = clerkWebhookProfile(evt.data);
+      const email = profile.email;
+      const name = profile.name || email;
+      const image_url = profile.imageUrl;
 
       // Upsert: the user may already exist (created on first request before this webhook arrived),
       // and Clerk redelivers events, so this handler must be idempotent.
@@ -67,9 +71,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (evt.type === 'user.updated') {
-      const { id, email_addresses, first_name, last_name, image_url } = evt.data;
-      const email = email_addresses[0]?.email_address;
-      const name = [first_name, last_name].filter(Boolean).join(' ');
+      const { id } = evt.data;
+      // No verified primary address (null) leaves the stored email unchanged rather than replacing it
+      // with an unverified one.
+      const { email, name, imageUrl: image_url } = clerkWebhookProfile(evt.data);
 
       // updateMany: an update for a user we never stored is a no-op rather than a 500 + retry storm.
       await prisma.user.updateMany({

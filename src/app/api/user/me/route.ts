@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { ensureDbUser } from '@/lib/ensureUser';
+import { pickPrimaryVerifiedEmail } from '@/lib/clerkEmail';
 import { lapseExpiredPro } from '@/lib/proExpiry';
 import { effectivePlan, generationsRemaining } from '@/lib/plans';
 
@@ -25,7 +26,8 @@ export async function GET() {
   // Auto-create user if webhook hasn't fired yet (race condition safety). Upsert keyed on clerkId,
   // so a concurrent webhook / generation request creating the same row is harmless.
   if (!dbUser) {
-    const email = user.emailAddresses?.[0]?.emailAddress || '';
+    // Verified primary address only (beta is keyed on it); null falls back to the placeholder.
+    const email = pickPrimaryVerifiedEmail(user.emailAddresses, user.primaryEmailAddressId);
     const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || email;
 
     try {
