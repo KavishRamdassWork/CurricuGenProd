@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { refineContentServer } from '@/lib/aiService';
-import { requireGenerationAccess, refundGeneration } from '@/lib/authGuard';
+import { requireGenerationAccess } from '@/lib/authGuard';
+import { handleGenerationError } from '@/lib/generationErrors';
+import { auditPromptInputs } from '@/lib/promptSafety';
 import { z } from 'zod';
 import { uploadedFileSchema } from '@/lib/requestSchemas';
 
@@ -19,12 +21,10 @@ export async function POST(req: NextRequest) {
   if (!guard.ok) return guard.response;
   try {
     const { currentContent, instruction, contextType, file } = schema.parse(await req.json());
+    auditPromptInputs('refine', guard.dbUser.id, [instruction]);
     const content = await refineContentServer(currentContent, instruction, contextType, file);
     return NextResponse.json({ content });
   } catch (error: unknown) {
-    await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
-    if (error instanceof z.ZodError) return NextResponse.json({ error: 'Invalid request data.' }, { status: 400 });
-    console.error('Generation error:', error);
-    return NextResponse.json({ error: 'Generation failed. Please try again.' }, { status: 500 });
+    return handleGenerationError(error, guard.dbUser, 'refine');
   }
 }

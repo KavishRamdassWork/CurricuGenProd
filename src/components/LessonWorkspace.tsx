@@ -33,6 +33,10 @@ const MOBILE_SECTIONS: { key: MainTab; label: string; icon: LucideIcon }[] = [
 type ResourceType = 'worksheet' | 'assignment' | 'test';
 type GenerationError = { code?: string; message?: string };
 const asGenerationError = (e: unknown): GenerationError => e as GenerationError;
+// Codes whose server text is shown as-is: no upgrade prompt (fair-use applies to Beta/Pro, the rest are not quota).
+const SERVER_MESSAGE_CODES = new Set(['FAIR_USE_LIMIT', 'CONTENT_BLOCKED', 'GENERATION_DISABLED']);
+const showsServerMessage = (err: GenerationError): err is GenerationError & { message: string } =>
+  !!err.code && SERVER_MESSAGE_CODES.has(err.code) && !!err.message;
 
 const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, onBack, onSaveClassContent, onContentGenerated, imagesLeft }) => {
   const isRevisionMode = units.length > 1;
@@ -183,6 +187,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       const err = asGenerationError(e);
       if (err.code === 'LIMIT_REACHED') {
         if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+      } else if (showsServerMessage(err)) {
+        alert(err.message);
       } else if (type === 'visuals' && err.message && (err.message.includes('400') || err.message.includes('429') || err.message.includes('paid plan') || err.message.includes('Quota'))) {
         alert("Image generation requires a Paid/Pro Gemini API key (Free Tier quota is 0).");
       } else {
@@ -218,6 +224,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       const err = asGenerationError(e);
       if (err.code === 'LIMIT_REACHED') {
         if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+      } else if (showsServerMessage(err)) {
+        alert(err.message);
       } else {
         alert(err.message || 'Error creating resource.');
       }
@@ -263,6 +271,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       const err = asGenerationError(e);
       if (err.code === 'LIMIT_REACHED') {
         if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+      } else if (showsServerMessage(err)) {
+        alert(err.message);
       } else {
         alert(err.message || 'Error refining content.');
       }
@@ -385,6 +395,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         alert('Daily image limit reached. Resets tomorrow. Upgrade to Pro for 10 images/day.');
       } else if (err.code === 'SAFETY_BLOCK') {
         alert('Image could not be generated — try rephrasing your description.');
+      } else if (showsServerMessage(err)) {
+        alert(err.message);
       } else {
         alert(err.message || 'Image generation is temporarily unavailable. Try again shortly.');
       }
@@ -417,7 +429,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         setSlideImageProgress(prev => ({ ...prev, current: generated }));
         onContentGenerated?.();
       } catch (e: unknown) {
-        if (asGenerationError(e).code === 'IMAGE_LIMIT_REACHED') break;
+        const code = asGenerationError(e).code;
+        if (code === 'IMAGE_LIMIT_REACHED' || code === 'GENERATION_DISABLED') break;
         console.error(`Failed slide ${slideNumber}:`, e);
       }
     }
@@ -925,6 +938,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                           const err = asGenerationError(e);
                           if (err.code === 'LIMIT_REACHED') {
                             if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+                          } else if (showsServerMessage(err)) {
+                            alert(err.message);
                           } else {
                             alert(err.message || 'Error generating memo. Content might be too large.');
                           }

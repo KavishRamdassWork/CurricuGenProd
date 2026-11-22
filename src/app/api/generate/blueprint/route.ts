@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateBlueprintServer } from '@/lib/aiService';
-import { requireGenerationAccess, refundGeneration } from '@/lib/authGuard';
+import { requireGenerationAccess } from '@/lib/authGuard';
+import { handleGenerationError } from '@/lib/generationErrors';
+import { auditPromptInputs } from '@/lib/promptSafety';
 import { Classroom, Student } from '@/lib/types';
 import { z } from 'zod';
 
@@ -30,13 +32,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const classroom = classroomSchema.parse(body.classroom);
+    auditPromptInputs('blueprint', guard.dbUser.id, [classroom.teachingNotes, classroom.accommodations, classroom.studentInterests]);
     const blueprint = await generateBlueprintServer(classroom as Classroom);
     return NextResponse.json({ blueprint });
   } catch (error: unknown) {
-    await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
-    console.error('Blueprint generation error:', error);
-    if (error instanceof z.ZodError) return NextResponse.json({ error: 'Invalid request data.' }, { status: 400 });
-    console.error('Generation error:', error);
-    return NextResponse.json({ error: 'Generation failed. Please try again.' }, { status: 500 });
+    return handleGenerationError(error, guard.dbUser, 'blueprint');
   }
 }

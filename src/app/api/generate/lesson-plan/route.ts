@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateLessonPlanServer } from '@/lib/aiService';
-import { requireGenerationAccess, refundGeneration } from '@/lib/authGuard';
+import { requireGenerationAccess } from '@/lib/authGuard';
+import { handleGenerationError } from '@/lib/generationErrors';
+import { auditPromptInputs } from '@/lib/promptSafety';
 import { z } from 'zod';
 import { classroomInputSchema, unitSchema, uploadedFileSchema } from '@/lib/requestSchemas';
 
@@ -19,12 +21,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { classroom, units, file } = schema.parse(body);
+    auditPromptInputs('lesson-plan', guard.dbUser.id, [classroom.teachingNotes, classroom.accommodations, classroom.studentInterests]);
     const content = await generateLessonPlanServer(classroom, units, file);
     return NextResponse.json({ content });
   } catch (error: unknown) {
-    await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
-    if (error instanceof z.ZodError) return NextResponse.json({ error: 'Invalid request data.' }, { status: 400 });
-    console.error('Generation error:', error);
-    return NextResponse.json({ error: 'Generation failed. Please try again.' }, { status: 500 });
+    return handleGenerationError(error, guard.dbUser, 'lesson-plan');
   }
 }

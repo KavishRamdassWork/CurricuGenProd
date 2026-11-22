@@ -176,6 +176,9 @@ const Dashboard = () => {
         if (!res.ok) {
           if (data.code === 'LIMIT_REACHED') {
             if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+          } else if (['FAIR_USE_LIMIT', 'CONTENT_BLOCKED', 'GENERATION_DISABLED'].includes(data.code) && data.error) {
+            // Fair-use (Beta/Pro), blocked content and the kill switch: show the server's text, no upgrade prompt.
+            alert(data.error);
           } else {
             alert(data.error || 'Failed to generate curriculum.');
           }

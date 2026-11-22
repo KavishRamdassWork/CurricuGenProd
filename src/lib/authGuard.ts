@@ -10,6 +10,8 @@ import buildRateLimit from '@/lib/rateLimit';
 import { reserveGenerationCredit, refundGenerationCredit, reserveImageCredit, refundImageCredit } from '@/lib/generationCredits';
 import { ensureDbUser, type ClerkProfile } from '@/lib/ensureUser';
 import { lapseExpiredPro } from '@/lib/proExpiry';
+import { effectivePlan } from '@/lib/plans';
+import { generationDisabled } from '@/lib/generationErrors';
 
 // Separate limiters: a shared one made text generations eat into the (stricter) image budget.
 const limiter = buildRateLimit({ uniqueTokenPerInterval: 5000, interval: 60000 });
@@ -37,7 +39,20 @@ export type GuardResult =
   | { ok: true; dbUser: { id: string; plan: string; generationsLeft: number; imagesLeft?: number } }
   | { ok: false; response: NextResponse };
 
+/** Kill-switch response (AI_GENERATION_DISABLED=true), returned before anything is reserved. */
+function disabledResponse(): GuardResult {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      { error: 'Generation is temporarily unavailable.', code: 'GENERATION_DISABLED' },
+      { status: 503 }
+    ),
+  };
+}
+
 export async function requireGenerationAccess(): Promise<GuardResult> {
+  if (generationDisabled()) return disabledResponse();
+
   const { userId } = await auth();
 
   if (!userId) {
@@ -72,35 +87,31 @@ export async function requireGenerationAccess(): Promise<GuardResult> {
     });
   }
 
-  if (dbUser.plan === 'FREE') {
-    // Reserve the credit now, atomically (see generationCredits.ts). Routes must call
-    // refundGeneration() if the generation then fails, so a failed request costs nothing.
-    const remaining = await reserveGenerationCredit(dbUser.id, 'FREE');
+  // The plan that applies on this request: PRO, or BETA while the email is on BETA_TESTER_EMAILS.
+  const plan = effectivePlan(dbUser.plan, dbUser.email);
 
-    if (remaining === null) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          { error: 'Daily free generation limit reached. Come back tomorrow or upgrade to Pro for unlimited generations.', code: 'LIMIT_REACHED' },
-          { status: 402 }
-        ),
-      };
-    }
+  // Reserve the credit now, atomically, for every plan (see generationCredits.ts). Routes pass
+  // failures to handleGenerationError(), which refunds it unless the request itself was blocked.
+  const remaining = await reserveGenerationCredit(dbUser.id, plan);
 
-    dbUser = { ...dbUser, generationsLeft: remaining };
+  if (remaining === null) {
+    const body = plan === 'FREE'
+      ? { error: 'Daily free generation limit reached. Come back tomorrow or upgrade to Pro for unlimited generations.', code: 'LIMIT_REACHED' }
+      : { error: "You have reached today's fair-use limit. It resets tomorrow.", code: 'FAIR_USE_LIMIT' };
+    return { ok: false, response: NextResponse.json(body, { status: 402 }) };
   }
 
-  return { ok: true, dbUser };
+  // Routes see the effective plan, not the stored one.
+  return { ok: true, dbUser: { ...dbUser, plan, generationsLeft: remaining } };
 }
 
 /**
- * Return the credit reserved by requireGenerationAccess() when the generation failed.
- * No-op for paid plans, which never reserve one.
+ * Return the credit reserved by requireGenerationAccess() when the generation failed. Every plan
+ * reserves, so every plan is refunded; `plan` is kept only for call-site compatibility.
  */
-export async function refundGeneration(userId: string, plan: string) {
-  if (plan === 'FREE') {
-    await refundGenerationCredit(userId);
-  }
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+export async function refundGeneration(userId: string, plan?: string) {
+  await refundGenerationCredit(userId);
 }
 
 /**
@@ -108,6 +119,8 @@ export async function refundGeneration(userId: string, plan: string) {
  * generated; routes must call refundImage() if generation then fails so a failed request costs nothing.
  */
 export async function requireImageAccess(): Promise<GuardResult> {
+  if (generationDisabled()) return disabledResponse();
+
   const { userId } = await auth();
 
   if (!userId) {
@@ -131,14 +144,15 @@ export async function requireImageAccess(): Promise<GuardResult> {
 
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: userId },
-    select: { id: true, plan: true },
+    select: { id: true, plan: true, email: true },
   });
 
   if (!dbUser) {
-    dbUser = await ensureDbUser(await clerkProfile(userId), { id: true, plan: true });
+    dbUser = await ensureDbUser(await clerkProfile(userId), { id: true, plan: true, email: true });
   }
 
-  const remaining = await reserveImageCredit(dbUser.id, dbUser.plan);
+  const plan = effectivePlan(dbUser.plan, dbUser.email);
+  const remaining = await reserveImageCredit(dbUser.id, plan);
   if (remaining === null) {
     return {
       ok: false,
@@ -152,7 +166,7 @@ export async function requireImageAccess(): Promise<GuardResult> {
     };
   }
 
-  return { ok: true, dbUser: { id: dbUser.id, plan: dbUser.plan, generationsLeft: 0, imagesLeft: remaining } };
+  return { ok: true, dbUser: { id: dbUser.id, plan, generationsLeft: 0, imagesLeft: remaining } };
 }
 
 /** Return the credit reserved by requireImageAccess() when the image could not be generated. */

@@ -3,9 +3,11 @@ import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { ensureDbUser } from '@/lib/ensureUser';
 import { lapseExpiredPro } from '@/lib/proExpiry';
+import { effectivePlan, generationsRemaining } from '@/lib/plans';
 
 const PROFILE_SELECT = {
   id: true, email: true, name: true, plan: true, generationsLeft: true, imagesLeft: true, createdAt: true,
+  generationsUsedToday: true, lastGenerationDate: true,
 } as const;
 
 /** GET /api/user/me — get current user's profile and subscription status */
@@ -37,5 +39,15 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ user: dbUser });
+  // Report the plan that applies right now (BETA comes from the env list, not the stored column) and
+  // the credits left under that plan's daily ceiling. The counter columns stay server-side.
+  const { generationsUsedToday, lastGenerationDate, ...profile } = dbUser;
+  const plan = effectivePlan(profile.plan, profile.email);
+  return NextResponse.json({
+    user: {
+      ...profile,
+      plan,
+      generationsLeft: generationsRemaining(plan, generationsUsedToday, lastGenerationDate),
+    },
+  });
 }
