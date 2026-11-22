@@ -18,7 +18,7 @@ import {
 import { attachmentParts } from '../../src/lib/attachments';
 import { setModelRunner, type ModelRequest, type ModelResult } from '../../src/lib/modelRunner';
 import { ContentBlockedError, MalformedOutputError, type GenKind } from '../../src/lib/outputScreen';
-import { ATTACHMENT_PREAMBLE } from '../../src/lib/promptSafety';
+import { ATTACHMENT_PREAMBLE, TEACHER_INSTRUCTION_LABEL, buildSystemInstruction } from '../../src/lib/promptSafety';
 import type { Classroom, UploadedFile, WeekUnit } from '../../src/lib/types';
 
 // No network in these tests: without keys, any accidental real client or Pinecone call fails loudly.
@@ -266,6 +266,82 @@ test.describe('failures surface as errors', () => {
   test('game rejects with MalformedOutputError on empty output', async () => {
     stub({ text: '' });
     await expect(generateGameServer(classroom, unit)).rejects.toBeInstanceOf(MalformedOutputError);
+  });
+
+  test('blueprint rejects with MalformedOutputError on non-JSON output', async () => {
+    stub({ text: '{not json', finishReason: 'STOP' });
+    await expect(generateBlueprintServer(classroom)).rejects.toBeInstanceOf(MalformedOutputError);
+  });
+
+  test('blueprint rejects with MalformedOutputError when units is not an array', async () => {
+    stub({ text: JSON.stringify({ title: 'T', description: 'D' }), finishReason: 'STOP' });
+    await expect(generateBlueprintServer(classroom)).rejects.toBeInstanceOf(MalformedOutputError);
+    stub({ text: JSON.stringify({ title: 'T', description: 'D', units: 'none' }), finishReason: 'STOP' });
+    await expect(generateBlueprintServer(classroom)).rejects.toBeInstanceOf(MalformedOutputError);
+  });
+
+  test('analyze rejects with MalformedOutputError on non-JSON output', async () => {
+    stub({ text: '{not json', finishReason: 'STOP' });
+    await expect(analyzeClassPerformanceServer([])).rejects.toBeInstanceOf(MalformedOutputError);
+  });
+
+  test('analyze rejects with MalformedOutputError when the JSON is not an object', async () => {
+    stub({ text: '[1, 2]', finishReason: 'STOP' });
+    await expect(analyzeClassPerformanceServer([])).rejects.toBeInstanceOf(MalformedOutputError);
+  });
+});
+
+test.describe('teacher instruction carve-out', () => {
+  const INSTRUCTION = 'Use rugby examples throughout';
+  const withInstruction: Array<{ name: string; run: () => Promise<unknown> }> = [
+    { name: 'worksheet', run: () => generateWorksheetServer(classroom, unit, 'Standard', undefined, INSTRUCTION) },
+    { name: 'assignment', run: () => generateAssignmentServer(classroom, unit, undefined, INSTRUCTION) },
+    { name: 'assessment', run: () => generateAssessmentServer(classroom, unit, undefined, INSTRUCTION) },
+    { name: 'refine', run: () => refineContentServer('## Lesson Flow\nbody', INSTRUCTION, 'lesson-plan') },
+  ];
+
+  for (const c of withInstruction) {
+    test(`${c.name} fences the teacher instruction under exactly the "${TEACHER_INSTRUCTION_LABEL}" label`, async () => {
+      stub();
+      await c.run();
+      const prompt = promptOf(lastRequest());
+      expect(TEACHER_INSTRUCTION_LABEL).toBe('instruction');
+      expectOnlyFenced(prompt, INSTRUCTION, 'instruction');
+      // It appears in no other block, and the prompt tells the model it is the teacher's request.
+      const holders = fences(prompt).filter((f) => f.body.includes(INSTRUCTION)).map((f) => f.label);
+      expect(holders).toEqual(['instruction']);
+      expect(outsideFences(prompt)).toContain("the teacher's own request");
+    });
+  }
+
+  test('no other fence label used by any generator is carved out', async () => {
+    stub();
+    const fullClass = { ...classroom };
+    await generateBlueprintServer(fullClass);
+    await generateLessonPlanServer(fullClass, [unit], textFile);
+    await generateWorksheetServer(fullClass, unit, 'Standard', textFile, INSTRUCTION);
+    await generateAssignmentServer(fullClass, unit, textFile, INSTRUCTION);
+    await generateAssessmentServer(fullClass, unit, textFile, INSTRUCTION, [unit]);
+    await generateMemoServer('content', fullClass);
+    await generatePresentationServer(fullClass, [unit]);
+    await generateGameServer(fullClass, unit, textFile);
+    await generateResourcesServer(fullClass, unit, textFile);
+    await refineContentServer('content', INSTRUCTION, 'lesson-plan', textFile);
+    await analyzeClassPerformanceServer([{ id: 's', name: 'A', average: 1, marks: { t: 1 } }]);
+
+    const labels = new Set(requests.flatMap((r) => fences(promptOf(r)).map((f) => f.label)));
+    expect(labels.has('instruction')).toBe(true);
+    expect(labels.size).toBeGreaterThan(5);
+
+    const carveOut = buildSystemInstruction()
+      .split('\n\n')
+      .filter((p) => p.startsWith('Exception:'));
+    expect(carveOut).toHaveLength(1);
+    for (const label of labels) {
+      if (label === 'instruction') continue;
+      expect(carveOut[0]).not.toContain(`"${label}"`);
+      expect(carveOut[0]).not.toContain(`UNTRUSTED ${label} `);
+    }
   });
 });
 
