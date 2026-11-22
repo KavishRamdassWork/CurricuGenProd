@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { ensureDbUser } from '@/lib/ensureUser';
+import { lapseExpiredPro } from '@/lib/proExpiry';
 
 const PROFILE_SELECT = {
   id: true, email: true, name: true, plan: true, generationsLeft: true, imagesLeft: true, createdAt: true,
@@ -11,6 +12,8 @@ const PROFILE_SELECT = {
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  await lapseExpiredPro({ clerkId: user.id });
 
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: user.id },

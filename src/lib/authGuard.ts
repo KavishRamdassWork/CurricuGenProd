@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import buildRateLimit from '@/lib/rateLimit';
 import { reserveGenerationCredit, refundGenerationCredit, reserveImageCredit, refundImageCredit } from '@/lib/generationCredits';
 import { ensureDbUser, type ClerkProfile } from '@/lib/ensureUser';
+import { lapseExpiredPro } from '@/lib/proExpiry';
 
 // Separate limiters: a shared one made text generations eat into the (stricter) image budget.
 const limiter = buildRateLimit({ uniqueTokenPerInterval: 5000, interval: 60000 });
@@ -55,6 +56,9 @@ export async function requireGenerationAccess(): Promise<GuardResult> {
       response: NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 }),
     };
   }
+
+  // A cancelled subscription keeps Pro to the end of the paid period; downgrade once that has passed.
+  await lapseExpiredPro({ clerkId: userId });
 
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: userId },
@@ -122,6 +126,8 @@ export async function requireImageAccess(): Promise<GuardResult> {
       response: NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 }),
     };
   }
+
+  await lapseExpiredPro({ clerkId: userId });
 
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: userId },

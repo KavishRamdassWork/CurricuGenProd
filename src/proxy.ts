@@ -5,6 +5,9 @@ const isPublicRoute = createRouteMatcher([
   '/',
   '/sign-in(.*)',
   '/sign-up(.*)',
+  '/terms',          // legal documents must be readable without an account (PayFast / bank review)
+  '/refund-policy',
+  '/pricing',        // PayFast reviewers must see price, currency and policies without signing in
   '/api/webhooks(.*)',
   '/api/health',    // health check — intentionally public, no auth required
 ]);

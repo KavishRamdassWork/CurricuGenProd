@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { verifyPayFastSignature, validateWithPayFast, PRO_PRICE_ZAR } from "@/lib/payfast";
+import { addMonths } from "@/lib/proExpiry";
 
 const PASSPHRASE = process.env.PAYFAST_PASSPHRASE || '';
 const MERCHANT_ID = process.env.PAYFAST_MERCHANT_ID || '10000100';
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
     if (data.pf_payment_id) {
       await prisma.payment.upsert({
         where: { pfPaymentId: data.pf_payment_id },
-        update: { status: payment_status },
+        update: {},
         create: {
           pfPaymentId: data.pf_payment_id,
           mPaymentId: data.m_payment_id || null,
@@ -71,6 +72,12 @@ export async function POST(req: NextRequest) {
           status: payment_status,
           amountGross: data.amount_gross || null,
         },
+      });
+      // A COMPLETE payment is a fact: a later CANCELLED/FAILED notification (or an out-of-order
+      // redelivery) must not rewrite it, because cancellation handling relies on the paid history.
+      await prisma.payment.updateMany({
+        where: { pfPaymentId: data.pf_payment_id, status: { not: 'COMPLETE' } },
+        data: { status: payment_status },
       });
     }
 
@@ -81,6 +88,7 @@ export async function POST(req: NextRequest) {
         where: { clerkId },
         data: {
           plan: "PRO",
+          proExpiresAt: null, // paying (or re-subscribed): clear any scheduled end from an earlier cancellation
           stripeCustomerId: token || undefined // Store the PayFast token here instead of Stripe id
         },
       });
@@ -89,11 +97,34 @@ export async function POST(req: NextRequest) {
         console.error("[PAYFAST_WEBHOOK] COMPLETE payment for unknown user", { clerkId, pf_payment_id: data.pf_payment_id });
         return new NextResponse("User not found", { status: 500 });
       }
-    } else if (payment_status === "CANCELLED" || payment_status === "FAILED") {
-      // Only downgrade paying users - never touch BETA testers or users already on FREE.
+    } else if (payment_status === "CANCELLED") {
+      // The customer has paid for the current month (Refund Policy 4.4), so cancelling stops renewals
+      // but keeps Pro until that period ends. lapseExpiredPro() does the downgrade at that moment.
+      // Only touches PRO users - never BETA testers or users already on FREE.
+      const lastPaid = await prisma.payment.findFirst({
+        where: { clerkId, status: "COMPLETE" },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      });
+      const paidThrough = lastPaid ? addMonths(lastPaid.createdAt, 1) : null;
+
+      if (paidThrough && paidThrough > new Date()) {
+        await prisma.user.updateMany({
+          where: { clerkId, plan: "PRO" },
+          data: { proExpiresAt: paidThrough },
+        });
+      } else {
+        // No paid period left (or no payment on record): nothing to honour, end Pro now.
+        await prisma.user.updateMany({
+          where: { clerkId, plan: "PRO" },
+          data: { plan: "FREE", proExpiresAt: null },
+        });
+      }
+    } else if (payment_status === "FAILED") {
+      // A failed charge means the period is not paid for: back to FREE straight away (Refund Policy 3.4).
       await prisma.user.updateMany({
         where: { clerkId, plan: "PRO" },
-        data: { plan: "FREE" },
+        data: { plan: "FREE", proExpiresAt: null },
       });
     }
 

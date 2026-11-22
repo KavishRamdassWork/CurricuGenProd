@@ -3,23 +3,31 @@
 import React, { useState } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Check, Sparkles, Zap, Shield, Crown, Loader2, Info } from 'lucide-react';
+import { LEGAL } from '@/lib/legal';
+import { PRO_PRICE_DISPLAY } from '@/lib/pricing';
 
 export default function PricingPage() {
   const { user, isLoaded } = useUser();
   const router = useRouter();
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  // PayFast requires an affirmative "click-to-accept" of the refund policy / purchase terms at checkout.
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const handleUpgrade = async () => {
     if (!user) {
       router.push('/sign-in?redirect_url=/pricing');
       return;
     }
+    if (!acceptedTerms) return;
 
     setIsCheckoutLoading(true);
     try {
       const res = await fetch('/api/payfast/checkout', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ acceptedTerms: true, termsVersion: LEGAL.version }),
       });
       const data = await res.json();
       
@@ -129,8 +137,8 @@ export default function PricingPage() {
                 CurricuGen Pro <Zap className="w-5 h-5 text-amber-400 fill-amber-400/20" />
               </h2>
               <div className="flex items-baseline gap-2 mb-4">
-                <span className="text-5xl font-extrabold text-white">$9.99</span>
-                <span className="text-blue-200 font-medium">/month</span>
+                <span className="text-5xl font-extrabold text-white">{PRO_PRICE_DISPLAY}</span>
+                <span className="text-blue-200 font-medium">/month (ZAR)</span>
               </div>
               <p className="text-blue-100/70 text-sm leading-relaxed">Everything you need to run your classroom effortlessly.</p>
             </div>
@@ -155,10 +163,45 @@ export default function PricingPage() {
               ))}
             </ul>
 
-            <button 
+            {/* Purchase terms are shown on the same screen as the checkout button (PayFast requirement). */}
+            <div className="mb-5 rounded-xl bg-blue-950/50 border border-blue-400/20 p-4 text-xs text-blue-100/80 leading-relaxed space-y-2">
+              <p>
+                <strong className="text-white">What you are buying:</strong> a monthly subscription to CurricuGen Pro, an
+                online AI curriculum tool, delivered digitally to your account within minutes of payment.
+              </p>
+              <p>
+                <strong className="text-white">Price:</strong> {PRO_PRICE_DISPLAY} (ZAR) per month, charged today and then
+                every month on the same date until you cancel.
+              </p>
+              <p>
+                <strong className="text-white">Cancel any time</strong> with no penalty. <strong className="text-white">
+                7-day money-back guarantee</strong>: refund in full if you ask within 7 days of subscribing.
+              </p>
+              <p>
+                Supplier: {LEGAL.companyName}, {LEGAL.country}. Support: {LEGAL.supportEmail}.
+              </p>
+            </div>
+
+            <label className="flex items-start gap-3 mb-5 cursor-pointer text-sm text-blue-50">
+              <input
+                type="checkbox"
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+                className="mt-0.5 h-5 w-5 flex-shrink-0 rounded accent-amber-400"
+              />
+              <span>
+                I have read and accept the{' '}
+                <Link href="/refund-policy" target="_blank" className="underline font-semibold text-white">Refund, Cancellation &amp; Delivery Policy</Link>{' '}
+                and the{' '}
+                <Link href="/terms" target="_blank" className="underline font-semibold text-white">End User Licence Agreement</Link>,
+                and I authorise recurring monthly payments of {PRO_PRICE_DISPLAY} through PayFast until I cancel.
+              </span>
+            </label>
+
+            <button
               onClick={handleUpgrade}
-              disabled={isCheckoutLoading || !isLoaded}
-              className="group relative w-full py-4 px-6 rounded-xl bg-white hover:bg-slate-50 text-blue-900 font-extrabold shadow-xl shadow-blue-900/20 transition-all hover:shadow-2xl hover:-translate-y-1 overflow-hidden"
+              disabled={isCheckoutLoading || !isLoaded || (!!user && !acceptedTerms)}
+              className="group relative w-full py-4 px-6 rounded-xl bg-white hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed text-blue-900 font-extrabold shadow-xl shadow-blue-900/20 transition-all hover:shadow-2xl hover:-translate-y-1 overflow-hidden"
             >
               <div className="absolute inset-0 bg-gradient-to-r from-transparent via-blue-100/40 to-transparent -translate-x-[150%] animate-[shimmer_2s_infinite] group-hover:animate-none" />
               <div className="relative flex justify-center items-center gap-2">
@@ -185,7 +228,15 @@ export default function PricingPage() {
             </div>
             <div>
               <h4 className="font-bold text-slate-200 mb-2">Can I cancel my subscription?</h4>
-              <p className="text-sm text-slate-400 leading-relaxed">Yes, absolutely. You can manage and cancel your active subscription at any time right from your Dashboard. No lock-in contracts.</p>
+              <p className="text-sm text-slate-400 leading-relaxed">Yes, at any time, with no penalty. Email {LEGAL.supportEmail} from your account address and we will cancel it with PayFast within 1 business day. You keep Pro until the end of the month you have paid for, and we refund in full if you ask within 7 days of subscribing.</p>
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-200 mb-2">How is Pro delivered and billed?</h4>
+              <p className="text-sm text-slate-400 leading-relaxed">Pro is a digital service: it switches on in your account within minutes of PayFast confirming payment. You are billed {PRO_PRICE_DISPLAY} (ZAR) every month until you cancel.</p>
+            </div>
+            <div>
+              <h4 className="font-bold text-slate-200 mb-2">Where is the full small print?</h4>
+              <p className="text-sm text-slate-400 leading-relaxed">Read the <Link href="/terms" className="text-blue-400 hover:text-blue-300 underline">End User Licence Agreement</Link> and the <Link href="/refund-policy" className="text-blue-400 hover:text-blue-300 underline">Refund, Cancellation &amp; Delivery Policy</Link>.</p>
             </div>
           </div>
         </div>

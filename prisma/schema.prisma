@@ -23,6 +23,9 @@ model User {
   name             String?
   imageUrl         String?
   plan             Plan        @default(FREE)
+  /// Set when a PRO subscription is cancelled: Pro access continues until this moment (end of the
+  /// period already paid for), then `lapseExpiredPro` returns the user to FREE. Null = no scheduled end.
+  proExpiresAt     DateTime?
   generationsLeft  Int         @default(10)
   lastGenerationDate DateTime?
   imagesLeft       Int         @default(1)

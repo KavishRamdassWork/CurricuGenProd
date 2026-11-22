@@ -15,8 +15,8 @@ export interface PayFastData {
   custom_str1?: string; // We use this for clerk userId
 }
 
-/** Price of the Pro plan in ZAR. Single source of truth for checkout and the ITN amount check. */
-export const PRO_PRICE_ZAR = '180.00';
+// Price lives in ./pricing so client components (pricing page) can import it without pulling in `crypto`.
+export { PRO_PRICE_ZAR } from './pricing';
 
 /**
  * Generates the MD5 signature required by PayFast.

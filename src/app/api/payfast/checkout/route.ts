@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
 import { generatePayFastSignature, payfastHost, PRO_PRICE_ZAR } from "@/lib/payfast";
+import { LEGAL } from "@/lib/legal";
+import { lapseExpiredPro } from "@/lib/proExpiry";
 
 // Use sandbox credentials if in development, otherwise env vars
 const MERCHANT_ID = process.env.PAYFAST_MERCHANT_ID || '10000100';
@@ -9,12 +11,25 @@ const MERCHANT_KEY = process.env.PAYFAST_MERCHANT_KEY || '46f0cd694581a';
 const PASSPHRASE = process.env.PAYFAST_PASSPHRASE || '';
 const PAYFAST_URI = `https://${payfastHost()}/eng/process`;
 
-export async function POST(_req: NextRequest) {
+export async function POST(req: NextRequest) {
   try {
     const { userId } = await auth();
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
+
+    // PayFast requires affirmative acceptance of the refund policy / recurring authorisation before
+    // payment. The pricing page sends it; refuse checkout without it so the rule cannot be bypassed.
+    const body = await req.json().catch(() => null);
+    if (!body || body.acceptedTerms !== true || body.termsVersion !== LEGAL.version) {
+      return NextResponse.json(
+        { error: "Please accept the Refund Policy and Licence Agreement to continue." },
+        { status: 400 }
+      );
+    }
+
+    // A user whose cancelled subscription has run out can subscribe again.
+    await lapseExpiredPro({ clerkId: userId });
 
     const dbUser = await prisma.user.findUnique({
       where: { clerkId: userId },
