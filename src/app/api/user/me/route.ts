@@ -1,50 +1,55 @@
 import { NextResponse } from 'next/server';
 import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
-import { Plan } from '@prisma/client';
+import { ensureDbUser } from '@/lib/ensureUser';
+import { pickPrimaryVerifiedEmail } from '@/lib/clerkEmail';
+import { lapseExpiredPro } from '@/lib/proExpiry';
+import { effectivePlan, generationsRemaining } from '@/lib/plans';
+
+const PROFILE_SELECT = {
+  id: true, email: true, name: true, plan: true, generationsLeft: true, imagesLeft: true, createdAt: true,
+  generationsUsedToday: true, lastGenerationDate: true,
+} as const;
 
 /** GET /api/user/me — get current user's profile and subscription status */
 export async function GET() {
   const user = await currentUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  await lapseExpiredPro({ clerkId: user.id });
+
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: user.id },
-    select: { id: true, email: true, name: true, plan: true, generationsLeft: true, imagesLeft: true, createdAt: true },
+    select: PROFILE_SELECT,
   });
 
-  // Auto-create user if webhook hasn't fired yet (race condition safety)
+  // Auto-create user if webhook hasn't fired yet (race condition safety). Upsert keyed on clerkId,
+  // so a concurrent webhook / generation request creating the same row is harmless.
   if (!dbUser) {
-    const email = user.emailAddresses?.[0]?.emailAddress || '';
+    // Verified primary address only (beta is keyed on it); null falls back to the placeholder.
+    const email = pickPrimaryVerifiedEmail(user.emailAddresses, user.primaryEmailAddressId);
     const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || email;
 
-    const betaEmails = (process.env.BETA_TESTER_EMAILS || "")
-      .toLowerCase()
-      .split(",")
-      .map((e) => e.trim())
-      .filter(Boolean);
-
-    const isBeta = email && betaEmails.includes(email.toLowerCase());
-    const plan: Plan = isBeta ? 'BETA' : 'FREE';
-
     try {
-      dbUser = await prisma.user.create({
-        data: {
-          clerkId: user.id,
-          email,
-          name,
-          plan,
-          generationsLeft: 10,
-          imagesLeft: 1,
-          lastGenerationDate: new Date()
-        },
-        select: { id: true, email: true, name: true, plan: true, generationsLeft: true, imagesLeft: true, createdAt: true },
-      });
+      dbUser = await ensureDbUser(
+        { clerkId: user.id, email, name, imageUrl: user.imageUrl },
+        PROFILE_SELECT
+      );
     } catch (err) {
       console.error('Failed to auto-create user', err);
-      return NextResponse.json({ error: 'Failed to create user profile. Email may already be in use by another test account?' }, { status: 500 });
+      return NextResponse.json({ error: 'Failed to create user profile.' }, { status: 500 });
     }
   }
 
-  return NextResponse.json({ user: dbUser });
+  // Report the plan that applies right now (BETA comes from the env list, not the stored column) and
+  // the credits left under that plan's daily ceiling. The counter columns stay server-side.
+  const { generationsUsedToday, lastGenerationDate, ...profile } = dbUser;
+  const plan = effectivePlan(profile.plan, profile.email);
+  return NextResponse.json({
+    user: {
+      ...profile,
+      plan,
+      generationsLeft: generationsRemaining(plan, generationsUsedToday, lastGenerationDate),
+    },
+  });
 }

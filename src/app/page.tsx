@@ -50,6 +50,12 @@ export default async function RootPage() {
             <span className="w-1.5 h-1.5 bg-slate-400 rounded-full" />
             Powered by Google Gemini AI
           </p>
+          <p className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+            <Link href="/pricing" className="hover:text-slate-300 underline-offset-2 hover:underline">Pricing</Link>
+            <Link href="/terms" className="hover:text-slate-300 underline-offset-2 hover:underline">Licence Agreement</Link>
+            <Link href="/refund-policy" className="hover:text-slate-300 underline-offset-2 hover:underline">Refund Policy</Link>
+            <Link href="/privacy" className="hover:text-slate-300 underline-offset-2 hover:underline">Privacy Policy</Link>
+          </p>
         </div>
       </div>
     </main>

@@ -110,4 +110,7 @@ export interface Classroom {
   analysis?: ClassAnalysis;
   blueprint?: Blueprint;
   savedLessons?: Record<string, LessonContent>;
+
+  /** Optimistic-locking counter from the server; sent back on saves to detect concurrent edits. */
+  version?: number;
 }

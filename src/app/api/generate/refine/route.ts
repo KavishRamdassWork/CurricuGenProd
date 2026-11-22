@@ -1,24 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { refineContentServer } from '@/lib/aiService';
-import { requireGenerationAccess, refundGeneration } from '@/lib/authGuard';
+import { requireGenerationAccess } from '@/lib/authGuard';
+import { handleGenerationError } from '@/lib/generationErrors';
+import { AUDITED_CONTENT_CHARS, auditPromptInputs } from '@/lib/promptSafety';
 import { z } from 'zod';
+import { uploadedFileSchema } from '@/lib/requestSchemas';
 
 const schema = z.object({
   currentContent: z.string().max(50000),
   instruction: z.string().max(300),
   contextType: z.string().max(50),
-  file: z.object({ name: z.string(), mimeType: z.string(), data: z.string() }).optional(),
+  file: uploadedFileSchema.optional(),
 });
+
+// Gemini calls (55 s timeout, one retry) need more than the platform default.
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   const guard = await requireGenerationAccess();
   if (!guard.ok) return guard.response;
   try {
     const { currentContent, instruction, contextType, file } = schema.parse(await req.json());
+    auditPromptInputs('refine', guard.dbUser.id, [instruction, currentContent.slice(0, AUDITED_CONTENT_CHARS)]);
     const content = await refineContentServer(currentContent, instruction, contextType, file);
     return NextResponse.json({ content });
   } catch (error: unknown) {
-    await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
+    return handleGenerationError(error, guard.dbUser, 'refine');
   }
 }

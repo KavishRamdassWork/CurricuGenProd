@@ -46,6 +46,19 @@ const Dashboard = () => {
 
   const activeClass = classes.find(c => c.id === activeClassId);
 
+  // Always-current view of `classes` for async handlers (a closure captured before a state update
+  // would otherwise build its save from stale data and overwrite newer lessons).
+  const classesRef = useRef<Classroom[]>([]);
+  classesRef.current = classes;
+  // Last server version seen per classroom (optimistic locking) and a per-classroom save queue so
+  // this tab's own saves run one at a time instead of racing each other.
+  const versionsRef = useRef<Record<string, number>>({});
+  const saveQueues = useRef<Record<string, Promise<void>>>({});
+  const saveFailureShown = useRef(false); // alert once per session, not on every failed autosave
+  const rememberVersion = (c: { id: string; version?: number }) => {
+    if (typeof c.version === 'number') versionsRef.current[c.id] = c.version;
+  };
+
   // ─── Load classrooms + user profile from DB on mount ─────────────────────
   useEffect(() => {
     if (!clerkUser) return;
@@ -58,6 +71,7 @@ const Dashboard = () => {
         ]);
         if (classRes.ok) {
           const { classrooms } = await classRes.json();
+          classrooms.forEach(rememberVersion);
           // Prisma returns JSON fields as plain objects — cast them back
           setClasses(classrooms.map((c: Classroom) => ({
             ...c,
@@ -94,16 +108,58 @@ const Dashboard = () => {
   }, []);
 
   // ─── Persist a classroom update to the DB ────────────────────────────────
-  const persistClassroom = useCallback(async (classroomId: string, patch: Partial<Classroom>) => {
-    try {
-      await fetch(`/api/classrooms/${classroomId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
-      });
-    } catch (err) {
-      console.error('Failed to persist classroom:', err);
-    }
+  // Saves for one classroom run in order. Each carries the version this tab last saw; if another
+  // device saved in between the server answers 409 with its current copy, and `resolveConflict`
+  // decides what to write on top of it (return null to give up). Without a resolver the same patch
+  // is simply re-applied on the new version (right for fields the user just edited explicitly).
+  const persistClassroom = useCallback((
+    classroomId: string,
+    patch: Partial<Classroom>,
+    resolveConflict?: (server: Classroom) => Partial<Classroom> | null,
+  ): Promise<void> => {
+    const run = async () => {
+      let body = patch;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetch(`/api/classrooms/${classroomId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            // An undefined version is dropped by JSON.stringify, i.e. an unconditional save.
+            body: JSON.stringify({ ...body, version: versionsRef.current[classroomId] }),
+          });
+          if (res.ok) {
+            const { classroom } = await res.json();
+            rememberVersion(classroom);
+            return;
+          }
+          if (res.status === 409) {
+            const { classroom: server } = await res.json().catch(() => ({}));
+            if (!server) return;
+            rememberVersion(server);
+            const next = resolveConflict ? resolveConflict(server) : body;
+            if (!next) return;
+            if (next !== body) {
+              // Show the merged result (e.g. lessons written on another device) locally too.
+              setClasses(prev => prev.map(c => (c.id === classroomId ? { ...c, ...next } : c)));
+            }
+            body = next;
+            continue;
+          }
+          console.error('Failed to persist classroom:', res.status);
+          if (!saveFailureShown.current) {
+            saveFailureShown.current = true;
+            alert('Your latest changes could not be saved' + (res.status === 400 ? ' (the class data is too large or invalid)' : '') + '. Please try again, and export anything important.');
+          }
+          return;
+        } catch (err) {
+          console.error('Failed to persist classroom:', err);
+          return;
+        }
+      }
+    };
+    const queued = (saveQueues.current[classroomId] ?? Promise.resolve()).then(run, run);
+    saveQueues.current[classroomId] = queued;
+    return queued;
   }, []);
 
   const handleOpenClass = async (classroom: Classroom) => {
@@ -119,7 +175,10 @@ const Dashboard = () => {
         const data = await res.json();
         if (!res.ok) {
           if (data.code === 'LIMIT_REACHED') {
-            if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+            if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for a much higher daily limit?')) window.location.href = '/pricing';
+          } else if (['FAIR_USE_LIMIT', 'CONTENT_BLOCKED', 'GENERATION_DISABLED'].includes(data.code) && data.error) {
+            // Fair-use (Beta/Pro), blocked content and the kill switch: show the server's text, no upgrade prompt.
+            alert(data.error);
           } else {
             alert(data.error || 'Failed to generate curriculum.');
           }
@@ -157,6 +216,7 @@ const Dashboard = () => {
         throw new Error(errData.error || 'Failed to create classroom');
       }
       const { classroom: created } = await res.json();
+      rememberVersion(created);
       const full: Classroom = { ...created, blueprint: undefined, students: [], assessmentColumns: [], savedLessons: {} };
       setClasses(prev => [full, ...prev]);
       return full;
@@ -190,11 +250,22 @@ const Dashboard = () => {
       const res = await fetch(`/api/classrooms/${classroomId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(patch),
+        body: JSON.stringify({ ...patch, version: versionsRef.current[classroomId] }),
       });
+      if (res.status === 409) {
+        // Changed on another device: adopt the server copy and ask the user to redo the edit.
+        const { classroom: server } = await res.json().catch(() => ({}));
+        if (server) {
+          rememberVersion(server);
+          setClasses(prev => prev.map(c => c.id === classroomId ? { ...c, ...server, blueprint: server.blueprint ?? undefined, students: server.students ?? [], assessmentColumns: server.assessmentColumns ?? [], savedLessons: server.savedLessons ?? {}, analysis: server.analysis ?? undefined } : c));
+        }
+        alert('This class was changed on another device. Your screen now shows the latest version - please apply your edit again.');
+        return null;
+      }
       if (!res.ok) throw new Error('Failed to update classroom');
       const { classroom: updated } = await res.json();
-      const full: Classroom = { ...before, ...updated };
+      rememberVersion(updated);
+      const full: Classroom = { ...before, ...patch, ...updated };
       setClasses(prev => prev.map(c => c.id === classroomId ? full : c));
 
       if (beforeHash !== afterHash && full.blueprint && Object.keys(full.savedLessons || {}).length > 0) {
@@ -228,10 +299,13 @@ const Dashboard = () => {
       const savedLessons = { ...(c.savedLessons || {}), [unitKey]: content };
       return { ...c, savedLessons };
     }));
-    const cls = classes.find(c => c.id === classId);
+    const cls = classesRef.current.find(c => c.id === classId);
     if (cls) {
       const savedLessons = { ...(cls.savedLessons || {}), [unitKey]: content };
-      await persistClassroom(classId, { savedLessons });
+      await persistClassroom(classId, { savedLessons }, (server) => ({
+        // Another device saved first: keep its lessons and lay this unit on top.
+        savedLessons: { ...((server.savedLessons as Record<string, LessonContent> | null) || {}), [unitKey]: content },
+      }));
     }
   };
 
@@ -336,7 +410,7 @@ const Dashboard = () => {
               {dbUser.plan === 'PRO' || dbUser.plan === 'BETA' ? (
                 <div className="flex items-center gap-2">
                   <Crown className={`w-3.5 h-3.5 ${dbUser.plan === 'PRO' ? 'text-amber-400' : 'text-blue-400'}`} /> 
-                  {dbUser.plan === 'PRO' ? 'Pro Plan' : 'Beta Tester'} — Unlimited
+                  {dbUser.plan === 'PRO' ? 'Pro Plan' : 'Beta Tester'} — fair use
                 </div>
               ) : (
                 <div className="flex items-center justify-between">

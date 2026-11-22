@@ -23,7 +23,18 @@ model User {
   name             String?
   imageUrl         String?
   plan             Plan        @default(FREE)
+  /// Set when a PRO subscription is cancelled: Pro access continues until this moment (end of the
+  /// period already paid for), then `lapseExpiredPro` returns the user to FREE. Null = no scheduled end.
+  proExpiresAt     DateTime?
   generationsLeft  Int         @default(10)
+  /// Generations taken on the day of `lastGenerationDate`, compared against the effective plan's
+  /// daily ceiling (src/lib/plans.ts). A new day resets it to 0 on the next reservation.
+  generationsUsedToday Int     @default(0)
+  /// Capped refunds (malformed or truncated model output) given back on the day of
+  /// `lastGenerationDate`. At most MAX_CAPPED_REFUNDS_PER_DAY (src/lib/generationCredits.ts) per day,
+  /// so deliberately broken requests cannot make the daily ceiling meaningless. Reset with
+  /// `generationsUsedToday`.
+  generationRefundsToday Int   @default(0)
   lastGenerationDate DateTime?
   imagesLeft       Int         @default(1)
   lastImageDate    DateTime?
@@ -31,6 +42,20 @@ model User {
   createdAt        DateTime    @default(now())
   updatedAt        DateTime    @updatedAt
   classrooms       Classroom[]
+}
+
+/// One row per PayFast notification (ITN) we accepted. Gives an audit trail for reconciling money
+/// against plans, and `pfPaymentId` makes redelivered notifications detectable.
+model Payment {
+  id          String   @id @default(cuid())
+  pfPaymentId String   @unique
+  mPaymentId  String?
+  clerkId     String
+  status      String
+  amountGross String?
+  createdAt   DateTime @default(now())
+
+  @@index([clerkId, createdAt])
 }
 
 model Classroom {
@@ -61,4 +86,12 @@ model Classroom {
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  // Optimistic-locking counter: bumped on every write. A client that sends the version it last saw
+  // is rejected (409) if someone else saved in between, instead of silently overwriting their data.
+  version           Int      @default(0)
+
+  // Every classroom query is "this user's classrooms, newest first". Postgres does not index
+  // foreign keys automatically, so without this the list query scans the whole table.
+  @@index([userId, updatedAt])
 }

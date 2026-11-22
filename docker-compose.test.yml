@@ -4,6 +4,9 @@ services:
   test_db:
     image: postgres:15-alpine
     restart: unless-stopped
+    # Every Playwright worker and the dev server open their own Prisma connection pool; the default
+    # limit of 100 is exhausted by the concurrency tests ("too many clients already").
+    command: postgres -c max_connections=300
     environment:
       POSTGRES_USER: testuser
       POSTGRES_PASSWORD: testpassword

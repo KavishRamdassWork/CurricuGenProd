@@ -3,22 +3,58 @@
  * Returns the DB user if they are authorized to generate content.
  * Throws with a NextResponse on failure.
  */
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import buildRateLimit from '@/lib/rateLimit';
-import { reserveGenerationCredit, refundGenerationCredit } from '@/lib/generationCredits';
+import { reserveGenerationCredit, reserveImageCredit, refundImageCredit } from '@/lib/generationCredits';
+import { pickPrimaryVerifiedEmail } from '@/lib/clerkEmail';
+import { ensureDbUser, type ClerkProfile } from '@/lib/ensureUser';
+import { lapseExpiredPro } from '@/lib/proExpiry';
+import { effectivePlan } from '@/lib/plans';
+import { generationDisabled } from '@/lib/generationErrors';
 
-const limiter = buildRateLimit({
-  uniqueTokenPerInterval: 500,
-  interval: 60000,
-});
+// Separate limiters: a shared one made text generations eat into the (stricter) image budget.
+const limiter = buildRateLimit({ uniqueTokenPerInterval: 5000, interval: 60000 });
+const imageLimiter = buildRateLimit({ uniqueTokenPerInterval: 5000, interval: 60000 });
+
+/** Profile used when the row has to be created before the Clerk webhook has arrived. */
+async function clerkProfile(clerkId: string): Promise<ClerkProfile> {
+  try {
+    const user = await currentUser();
+    if (user && user.id === clerkId) {
+      return {
+        clerkId,
+        // Verified primary address only (beta is keyed on it); null falls back to the placeholder.
+        email: pickPrimaryVerifiedEmail(user.emailAddresses, user.primaryEmailAddressId),
+        name: [user.firstName, user.lastName].filter(Boolean).join(' ') || null,
+        imageUrl: user.imageUrl,
+      };
+    }
+  } catch (error) {
+    console.error('Could not load Clerk profile for new user:', error);
+  }
+  return { clerkId };
+}
 
 export type GuardResult =
   | { ok: true; dbUser: { id: string; plan: string; generationsLeft: number; imagesLeft?: number } }
   | { ok: false; response: NextResponse };
 
+/** Kill-switch response (AI_GENERATION_DISABLED=true), returned before anything is reserved. */
+function disabledResponse(): GuardResult {
+  return {
+    ok: false,
+    response: NextResponse.json(
+      { error: 'Generation is temporarily unavailable.', code: 'GENERATION_DISABLED' },
+      { status: 503 }
+    ),
+  };
+}
+
 export async function requireGenerationAccess(): Promise<GuardResult> {
+  if (generationDisabled()) return disabledResponse();
+
   const { userId } = await auth();
 
   if (!userId) {
@@ -38,6 +74,9 @@ export async function requireGenerationAccess(): Promise<GuardResult> {
     };
   }
 
+  // A cancelled subscription keeps Pro to the end of the paid period; downgrade once that has passed.
+  await lapseExpiredPro({ clerkId: userId });
+
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: userId },
     select: { id: true, plan: true, generationsLeft: true, email: true, name: true },
@@ -45,46 +84,36 @@ export async function requireGenerationAccess(): Promise<GuardResult> {
 
   // Auto-create user if not yet in DB (webhook race condition)
   if (!dbUser) {
-    dbUser = await prisma.user.create({
-      data: { clerkId: userId, email: '', plan: 'FREE', generationsLeft: 10, lastGenerationDate: new Date() },
-      select: { id: true, plan: true, generationsLeft: true, email: true, name: true },
+    dbUser = await ensureDbUser(await clerkProfile(userId), {
+      id: true, plan: true, generationsLeft: true, email: true, name: true,
     });
   }
 
-  if (dbUser.plan === 'FREE') {
-    // Reserve the credit now, atomically (see generationCredits.ts). Routes must call
-    // refundGeneration() if the generation then fails, so a failed request costs nothing.
-    const remaining = await reserveGenerationCredit(dbUser.id);
+  // The plan that applies on this request: PRO, or BETA while the email is on BETA_TESTER_EMAILS.
+  const plan = effectivePlan(dbUser.plan, dbUser.email);
 
-    if (remaining === null) {
-      return {
-        ok: false,
-        response: NextResponse.json(
-          { error: 'Daily free generation limit reached. Come back tomorrow or upgrade to Pro for unlimited generations.', code: 'LIMIT_REACHED' },
-          { status: 402 }
-        ),
-      };
-    }
+  // Reserve the credit now, atomically, for every plan (see generationCredits.ts). Routes pass
+  // failures to handleGenerationError(), which refunds it unless the request itself was blocked.
+  const remaining = await reserveGenerationCredit(dbUser.id, plan);
 
-    dbUser = { ...dbUser, generationsLeft: remaining };
+  if (remaining === null) {
+    const body = plan === 'FREE'
+      ? { error: 'Daily free generation limit reached. Come back tomorrow or upgrade to Pro for a much higher daily limit.', code: 'LIMIT_REACHED' }
+      : { error: "You have reached today's fair-use limit. It resets tomorrow.", code: 'FAIR_USE_LIMIT' };
+    return { ok: false, response: NextResponse.json(body, { status: 402 }) };
   }
 
-  return { ok: true, dbUser };
+  // Routes see the effective plan, not the stored one.
+  return { ok: true, dbUser: { ...dbUser, plan, generationsLeft: remaining } };
 }
 
 /**
- * Return the credit reserved by requireGenerationAccess() when the generation failed.
- * No-op for paid plans, which never reserve one.
+ * Auth + rate limit + atomic image-credit reservation. The credit is taken here, before the image is
+ * generated; routes must call refundImage() if generation then fails so a failed request costs nothing.
  */
-export async function refundGeneration(userId: string, plan: string) {
-  if (plan === 'FREE') {
-    await refundGenerationCredit(userId);
-  }
-}
-
-const IMAGE_LIMITS: Record<string, number> = { FREE: 1, PRO: 10, BETA: 10 };
-
 export async function requireImageAccess(): Promise<GuardResult> {
+  if (generationDisabled()) return disabledResponse();
+
   const { userId } = await auth();
 
   if (!userId) {
@@ -96,7 +125,7 @@ export async function requireImageAccess(): Promise<GuardResult> {
 
   try {
     // Rate limit: max 3 image generation attempts per minute per user
-    await limiter.check(3, userId);
+    await imageLimiter.check(3, userId);
   } catch {
     return {
       ok: false,
@@ -104,39 +133,20 @@ export async function requireImageAccess(): Promise<GuardResult> {
     };
   }
 
+  await lapseExpiredPro({ clerkId: userId });
+
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: userId },
-    select: { id: true, plan: true, imagesLeft: true, lastImageDate: true },
+    select: { id: true, plan: true, email: true },
   });
 
   if (!dbUser) {
-    dbUser = await prisma.user.create({
-      data: {
-        clerkId: userId,
-        email: '',
-        plan: 'FREE',
-        generationsLeft: 10,
-        imagesLeft: 1,
-        lastGenerationDate: new Date(),
-        lastImageDate: new Date(),
-      },
-      select: { id: true, plan: true, imagesLeft: true, lastImageDate: true },
-    });
+    dbUser = await ensureDbUser(await clerkProfile(userId), { id: true, plan: true, email: true });
   }
 
-  const dailyLimit = IMAGE_LIMITS[dbUser.plan] ?? 1;
-  const today = new Date().toDateString();
-  const lastImage = dbUser.lastImageDate?.toDateString();
-
-  if (lastImage !== today) {
-    dbUser = await prisma.user.update({
-      where: { id: dbUser.id },
-      data: { imagesLeft: dailyLimit, lastImageDate: new Date() },
-      select: { id: true, plan: true, imagesLeft: true, lastImageDate: true },
-    });
-  }
-
-  if (dbUser.imagesLeft <= 0) {
+  const plan = effectivePlan(dbUser.plan, dbUser.email);
+  const remaining = await reserveImageCredit(dbUser.id, plan);
+  if (remaining === null) {
     return {
       ok: false,
       response: NextResponse.json(
@@ -149,15 +159,10 @@ export async function requireImageAccess(): Promise<GuardResult> {
     };
   }
 
-  return { ok: true, dbUser: { id: dbUser.id, plan: dbUser.plan, generationsLeft: 0, imagesLeft: dbUser.imagesLeft } };
+  return { ok: true, dbUser: { id: dbUser.id, plan, generationsLeft: 0, imagesLeft: remaining } };
 }
 
-export async function consumeImageGeneration(userId: string): Promise<void> {
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      imagesLeft: { decrement: 1 },
-      lastImageDate: new Date(),
-    },
-  });
+/** Return the credit reserved by requireImageAccess() when the image could not be generated. */
+export async function refundImage(userId: string, plan: string) {
+  await refundImageCredit(userId, plan);
 }

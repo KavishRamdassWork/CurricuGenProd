@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateAssessmentServer } from '@/lib/aiService';
-import { requireGenerationAccess, refundGeneration } from '@/lib/authGuard';
-import { Classroom, WeekUnit } from '@/lib/types';
+import { requireGenerationAccess } from '@/lib/authGuard';
+import { handleGenerationError } from '@/lib/generationErrors';
+import { auditPromptInputs } from '@/lib/promptSafety';
 import { z } from 'zod';
+import { classroomInputSchema, unitSchema, uploadedFileSchema } from '@/lib/requestSchemas';
 
 const schema = z.object({
-  classroom: z.custom<Classroom>(), unit: z.custom<WeekUnit>(),
-  file: z.object({ name: z.string(), mimeType: z.string(), data: z.string() }).optional(),
+  classroom: classroomInputSchema, unit: unitSchema,
+  file: uploadedFileSchema.optional(),
   userInstruction: z.string().max(300).optional(),
-  scopeUnits: z.array(z.custom<WeekUnit>()).optional(),
+  scopeUnits: z.array(unitSchema).max(60).optional(),
 });
+
+// Gemini calls (55 s timeout, one retry) need more than the platform default.
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   const guard = await requireGenerationAccess();
@@ -17,10 +22,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { classroom, unit, file, userInstruction, scopeUnits } = schema.parse(body);
+    auditPromptInputs('assessment', guard.dbUser.id, [userInstruction, classroom.teachingNotes, classroom.accommodations, classroom.studentInterests]);
     const content = await generateAssessmentServer(classroom, unit, file, userInstruction, scopeUnits);
     return NextResponse.json({ content });
   } catch (error: unknown) {
-    await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
+    return handleGenerationError(error, guard.dbUser, 'assessment');
   }
 }

@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateWorksheetServer } from '@/lib/aiService';
-import { requireGenerationAccess, refundGeneration } from '@/lib/authGuard';
-import { Classroom, WeekUnit } from '@/lib/types';
+import { requireGenerationAccess } from '@/lib/authGuard';
+import { handleGenerationError } from '@/lib/generationErrors';
+import { auditPromptInputs } from '@/lib/promptSafety';
 import { z } from 'zod';
+import { classroomInputSchema, unitSchema, uploadedFileSchema, worksheetTypeSchema } from '@/lib/requestSchemas';
 
 const schema = z.object({
-  classroom: z.custom<Classroom>(), unit: z.custom<WeekUnit>(),
-  type: z.string().max(50).default('Standard'),
-  file: z.object({ name: z.string(), mimeType: z.string(), data: z.string() }).optional(),
+  classroom: classroomInputSchema, unit: unitSchema,
+  type: worksheetTypeSchema,
+  file: uploadedFileSchema.optional(),
   userInstruction: z.string().max(300).optional(),
 });
+
+// Gemini calls (55 s timeout, one retry) need more than the platform default.
+export const maxDuration = 120;
 
 export async function POST(req: NextRequest) {
   const guard = await requireGenerationAccess();
@@ -17,10 +22,10 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const { classroom, unit, type, file, userInstruction } = schema.parse(body);
+    auditPromptInputs('worksheet', guard.dbUser.id, [userInstruction, classroom.teachingNotes, classroom.accommodations, classroom.studentInterests]);
     const content = await generateWorksheetServer(classroom, unit, type, file, userInstruction);
     return NextResponse.json({ content });
   } catch (error: unknown) {
-    await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
+    return handleGenerationError(error, guard.dbUser, 'worksheet');
   }
 }
