@@ -436,6 +436,17 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
     );
   };
 
+  const mobileSectionRows = (keys: MainTab[]) =>
+    MOBILE_SECTIONS.filter(section => keys.includes(section.key)).map(({ key, label, icon: Icon }) => (
+      <button
+        key={key}
+        onClick={() => { setActiveSection(key); setIsMobileSectionMenuOpen(false); }}
+        className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${activeSection === key ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
+      >
+        <Icon className="w-4 h-4" /> {label}
+      </button>
+    ));
+
   const handleContentScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const top = e.currentTarget.scrollTop;
     const delta = top - lastScrollTop.current;
@@ -564,8 +575,18 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
           <div>
             <div className="flex items-center justify-between px-2 mb-2">
               {!isSidebarCollapsed && <h3 className="text-xs font-bold text-slate-400 uppercase">Resources</h3>}
-              <button onClick={() => { setCreationType('worksheet'); setIsCreationModalOpen(true); }} className="p-1 text-blue-600 hover:bg-blue-50 rounded"><Plus className="w-4 h-4" /></button>
+              <button
+                onClick={() => { setCreationType('worksheet'); setIsCreationModalOpen(true); }}
+                aria-label="New worksheet, assignment or test"
+                title="New worksheet, assignment or test"
+                className={`flex items-center gap-1 text-xs font-bold text-blue-600 hover:bg-blue-50 rounded-lg ${isSidebarCollapsed ? 'p-1' : 'px-2 py-1.5'}`}
+              >
+                <Plus className="w-4 h-4" />{!isSidebarCollapsed && 'New'}
+              </button>
             </div>
+            {!isSidebarCollapsed && [...worksheets, ...assignments, ...tests].length === 0 && (
+              <p className="px-2 pb-2 text-xs text-slate-400">No worksheets, assignments or tests yet. Use New to create one.</p>
+            )}
             <div className="space-y-1">
               {[...worksheets, ...assignments, ...tests].map(r => (
                 <button key={r.id} onClick={() => { setActiveSection('educational'); setSelectedResourceId(r.id); }} className={`w-full flex items-center gap-3 p-2 rounded-lg text-sm transition-all ${selectedResourceId === r.id && activeSection === 'educational' ? 'bg-blue-50 text-blue-700 font-medium' : 'text-slate-600 hover:bg-slate-50'}`}>
@@ -666,32 +687,37 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
           <>
             <div className="fixed inset-0 z-20" onClick={() => setIsMobileSectionMenuOpen(false)} />
             <div className="absolute left-0 right-0 top-full max-h-[70vh] overflow-y-auto bg-white border-b border-slate-200 shadow-lg z-30">
-              {MOBILE_SECTIONS.map(({ key, label, icon: Icon }) => (
+              <div className="px-4 pt-3 pb-1 text-xs font-bold text-slate-400 uppercase">Teacher guide</div>
+              {mobileSectionRows(['plan', 'slides'])}
+              <div className="border-t border-slate-100 mt-1">
+                <div className="px-4 pt-3 pb-1 text-xs font-bold text-slate-400 uppercase">Resources</div>
                 <button
-                  key={key}
-                  onClick={() => { setActiveSection(key); setIsMobileSectionMenuOpen(false); }}
-                  className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${activeSection === key ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
+                  onClick={() => { setIsMobileSectionMenuOpen(false); setCreationType('worksheet'); setIsCreationModalOpen(true); }}
+                  className="w-full min-h-12 flex items-center gap-3 px-4 text-sm font-bold text-blue-700 bg-blue-50/70 active:bg-blue-100"
                 >
-                  <Icon className="w-4 h-4" /> {label}
+                  <span className="w-6 h-6 rounded-md bg-blue-600 text-white flex items-center justify-center flex-shrink-0"><Plus className="w-4 h-4" /></span>
+                  New worksheet, assignment or test
                 </button>
-              ))}
-              {[...worksheets, ...assignments, ...tests].length > 0 && (
-                <div className="border-t border-slate-100">
-                  <div className="px-4 pt-3 pb-1 text-xs font-bold text-slate-400 uppercase">Resources</div>
-                  {[...worksheets, ...assignments, ...tests].map(r => (
-                    <button
-                      key={r.id}
-                      onClick={() => { setActiveSection('educational'); setSelectedResourceId(r.id); setIsMobileSectionMenuOpen(false); }}
-                      className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${selectedResourceId === r.id && activeSection === 'educational' ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
-                    >
-                      {r.type === 'worksheet' && <FileText className="w-4 h-4 flex-shrink-0" />}
-                      {r.type === 'assignment' && <ClipboardList className="w-4 h-4 flex-shrink-0" />}
-                      {r.type === 'test' && <HelpCircle className="w-4 h-4 flex-shrink-0" />}
-                      <span className="truncate">{r.title}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
+                {[...worksheets, ...assignments, ...tests].map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => { setActiveSection('educational'); setSelectedResourceId(r.id); setIsMobileSectionMenuOpen(false); }}
+                    className={`w-full min-h-12 flex items-center gap-2 px-4 text-sm font-medium ${selectedResourceId === r.id && activeSection === 'educational' ? 'bg-blue-50 text-blue-700' : 'text-slate-600'}`}
+                  >
+                    {r.type === 'worksheet' && <FileText className="w-4 h-4 flex-shrink-0" />}
+                    {r.type === 'assignment' && <ClipboardList className="w-4 h-4 flex-shrink-0" />}
+                    {r.type === 'test' && <HelpCircle className="w-4 h-4 flex-shrink-0" />}
+                    <span className="truncate">{r.title}</span>
+                  </button>
+                ))}
+                {[...worksheets, ...assignments, ...tests].length === 0 && (
+                  <p className="px-4 pb-2 pt-1 text-xs text-slate-400">None yet. Create one above.</p>
+                )}
+              </div>
+              <div className="border-t border-slate-100 mt-1">
+                <div className="px-4 pt-3 pb-1 text-xs font-bold text-slate-400 uppercase">Enhancements</div>
+                {mobileSectionRows(['visuals', 'game', 'resources'])}
+              </div>
             </div>
           </>
         )}
@@ -929,13 +955,16 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       {isCreationModalOpen && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
-              <div className="flex flex-wrap gap-2 md:gap-3">
-                {(['worksheet', 'assignment', 'test'] as ResourceType[]).map(t => (
-                  <button key={t} onClick={() => setCreationType(t)} className={`px-3 py-1.5 rounded-lg text-sm font-bold capitalize ${creationType === t ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>{t}</button>
-                ))}
+            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-start gap-2 bg-slate-50">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 mb-3">Create a new resource</h3>
+                <div className="flex flex-wrap gap-2 md:gap-3">
+                  {(['worksheet', 'assignment', 'test'] as ResourceType[]).map(t => (
+                    <button key={t} onClick={() => setCreationType(t)} className={`px-3 py-2 md:py-1.5 rounded-lg text-sm font-bold capitalize ${creationType === t ? 'bg-blue-600 text-white' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}>{t}</button>
+                  ))}
+                </div>
               </div>
-              <button onClick={() => setIsCreationModalOpen(false)}><X className="w-5 h-5 text-slate-400" /></button>
+              <button onClick={() => setIsCreationModalOpen(false)} aria-label="Close" className="w-10 h-10 -mt-1 -mr-2 flex items-center justify-center flex-shrink-0"><X className="w-5 h-5 text-slate-400" /></button>
             </div>
             <div className="p-4 md:p-6 space-y-4">
               {creationType === 'test' && (

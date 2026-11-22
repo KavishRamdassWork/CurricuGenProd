@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Blueprint, WeekUnit, Classroom } from '@/lib/types';
 import { Target, Plus, Trash2, Clock, Edit3, CheckSquare, ArrowRight, Sparkles, Pencil } from 'lucide-react';
 
@@ -13,9 +13,48 @@ interface CurriculumDashboardProps {
   onEditClass: () => void;
 }
 
+/** Smoothly collapses its content to zero height (and takes it out of the tab order) when `open` is false. */
+const Collapsible = ({ open, className = '', children }: { open: boolean; className?: string; children: React.ReactNode }) => (
+  <div
+    className={`grid transition-[grid-template-rows,opacity] duration-200 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0 pointer-events-none'} ${className}`}
+    aria-hidden={!open}
+    inert={!open}
+  >
+    {/* p-1 / -m-1: room for button shadows and hover lift inside the clip without adding layout height */}
+    <div className="overflow-hidden min-h-0 p-1 -m-1">{children}</div>
+  </div>
+);
+
 const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, activeClass, onSelectUnits, onUpdateBlueprint, onReset, onEditClass }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [selectedWeekIndices, setSelectedWeekIndices] = useState<number[]>([]);
+  // The banner (badges, description, Edit buttons) folds away while scrolling down so more weeks fit on screen,
+  // and returns on scroll up or at the top. It stays open while editing so "Finish Editing" is never hidden.
+  const [isHeaderScrolledAway, setIsHeaderScrolledAway] = useState(false);
+  const lastScrollTop = useRef(0);
+  const upDistance = useRef(0);
+  const isHeaderCompact = isHeaderScrolledAway && !isEditing;
+
+  const handleScroll = (e: React.UIEvent<HTMLElement>) => {
+    const top = e.currentTarget.scrollTop;
+    if (top < 8) {
+      setIsHeaderScrolledAway(false);
+      lastScrollTop.current = top;
+      return;
+    }
+    const delta = top - lastScrollTop.current;
+    lastScrollTop.current = top;
+    if (delta > 0) {
+      // Scrolling down: fold the banner away straight away.
+      upDistance.current = 0;
+      setIsHeaderScrolledAway(true);
+    } else if (delta < 0) {
+      // Scrolling up: only bring it back after a deliberate scroll, so a small nudge back
+      // to re-read a line doesn't push the content down again.
+      upDistance.current += -delta;
+      if (upDistance.current >= 80) setIsHeaderScrolledAway(false);
+    }
+  };
 
   // Re-indexing helper
   const reindexWeeks = (units: WeekUnit[]): WeekUnit[] => units.map((u, idx) => ({ ...u, weekNumber: idx + 1 }));
@@ -77,20 +116,25 @@ const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, ac
       <div className="absolute top-0 right-0 w-1/2 h-1/2 bg-gradient-to-bl from-blue-100/40 via-purple-50/20 to-transparent rounded-bl-full pointer-events-none" />
 
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-slate-200/50 px-4 sm:px-6 lg:px-10 py-3 lg:py-8 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4 z-10 shadow-sm min-w-0">
+      <header className={`bg-white/80 backdrop-blur-xl border-b border-slate-200/50 px-4 sm:px-6 lg:px-10 flex flex-col lg:flex-row lg:items-end lg:justify-between z-10 shadow-sm min-w-0 transition-[padding,gap] duration-200 ${isHeaderCompact ? 'py-2 lg:py-3 gap-0' : 'py-3 lg:py-8 gap-4'}`}>
         <div className="min-w-0 lg:pr-4">
-          <div className="flex items-center gap-2 sm:gap-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2 lg:mb-3 flex-wrap">
-             <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full whitespace-nowrap">{activeClass.grade}</span>
-             <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full tracking-widest whitespace-nowrap">{activeClass.subject}</span>
-             {!!(activeClass.accommodations || activeClass.learningStyles?.length) && (
-                 <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full flex items-center gap-1 whitespace-nowrap"><Sparkles className="w-3 h-3"/> Adapted</span>
-             )}
-          </div>
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight line-clamp-2 lg:line-clamp-1">{blueprint.title}</h1>
-          <p className="hidden sm:block mt-2 text-slate-500 font-medium max-w-2xl text-sm leading-relaxed line-clamp-2">{blueprint.description}</p>
+          <Collapsible open={!isHeaderCompact}>
+            <div className="flex items-center gap-2 sm:gap-3 text-[10px] font-extrabold text-slate-400 uppercase tracking-widest mb-2 lg:mb-3 flex-wrap">
+               <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full whitespace-nowrap">{activeClass.grade}</span>
+               <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full tracking-widest whitespace-nowrap">{activeClass.subject}</span>
+               {!!(activeClass.accommodations || activeClass.learningStyles?.length) && (
+                   <span className="bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full flex items-center gap-1 whitespace-nowrap"><Sparkles className="w-3 h-3"/> Adapted</span>
+               )}
+            </div>
+          </Collapsible>
+          <h1 className={`text-xl sm:text-2xl lg:text-3xl font-extrabold text-slate-900 tracking-tight ${isHeaderCompact ? 'line-clamp-1' : 'line-clamp-2 lg:line-clamp-1'}`}>{blueprint.title}</h1>
+          <Collapsible open={!isHeaderCompact}>
+            <p className="hidden sm:block mt-2 text-slate-500 font-medium max-w-2xl text-sm leading-relaxed line-clamp-2">{blueprint.description}</p>
+          </Collapsible>
         </div>
-        
-        <div className="flex gap-2 sm:gap-3 lg:flex-shrink-0">
+
+        <Collapsible open={!isHeaderCompact} className="lg:flex-shrink-0">
+        <div className="flex gap-2 sm:gap-3">
            <button
              onClick={onEditClass}
              className="min-h-12 flex flex-1 lg:flex-none justify-center items-center gap-2 px-4 sm:px-6 py-3 rounded-full font-bold text-sm transition-all duration-300 shadow-sm bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:-translate-y-0.5"
@@ -110,10 +154,11 @@ const CurriculumDashboard: React.FC<CurriculumDashboardProps> = ({ blueprint, ac
              {isEditing ? 'Finish Editing' : 'Edit Blueprint'}
            </button>
         </div>
+        </Collapsible>
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-12 z-0 custom-scrollbar relative">
+      <main onScroll={handleScroll} className="flex-1 overflow-y-auto p-3 sm:p-6 lg:p-12 z-0 custom-scrollbar relative">
         <div className="max-w-4xl mx-auto pb-32">
            {/* Timeline Spine Container */}
            <div className="relative">
