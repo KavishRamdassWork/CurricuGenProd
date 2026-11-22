@@ -27,6 +27,9 @@ model User {
   /// period already paid for), then `lapseExpiredPro` returns the user to FREE. Null = no scheduled end.
   proExpiresAt     DateTime?
   generationsLeft  Int         @default(10)
+  /// Generations taken on the day of `lastGenerationDate`, compared against the effective plan's
+  /// daily ceiling (src/lib/plans.ts). A new day resets it to 0 on the next reservation.
+  generationsUsedToday Int     @default(0)
   lastGenerationDate DateTime?
   imagesLeft       Int         @default(1)
   lastImageDate    DateTime?

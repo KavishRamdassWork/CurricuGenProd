@@ -75,7 +75,7 @@ export async function requireGenerationAccess(): Promise<GuardResult> {
   if (dbUser.plan === 'FREE') {
     // Reserve the credit now, atomically (see generationCredits.ts). Routes must call
     // refundGeneration() if the generation then fails, so a failed request costs nothing.
-    const remaining = await reserveGenerationCredit(dbUser.id);
+    const remaining = await reserveGenerationCredit(dbUser.id, 'FREE');
 
     if (remaining === null) {
       return {
