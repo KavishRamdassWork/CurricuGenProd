@@ -423,7 +423,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   };
 
   return (
-    <div className="flex h-full bg-slate-100 overflow-hidden relative">
+    <div className="flex flex-col md:flex-row h-full bg-slate-100 overflow-hidden relative">
       {/* LEFT TOOLBAR */}
       <aside className={`no-print hidden md:flex bg-white border-r border-slate-200 flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
         <div className="h-16 border-b border-slate-100 flex items-center px-4 gap-3">
@@ -515,7 +515,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
       </div>
 
       {/* MAIN DOCUMENT AREA */}
-      <main className="flex-1 flex flex-col h-full relative overflow-hidden">
+      <main className="flex-1 min-h-0 min-w-0 flex flex-col md:h-full relative overflow-hidden">
         <div className="no-print h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-none">
           <div className="min-w-0 pr-4 flex-1">
             <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2 truncate">
