@@ -1,8 +1,11 @@
-import { Type, Part } from "@google/genai";
+import { Type, PersonGeneration, SafetyFilterLevel, type GenerateImagesConfig } from "@google/genai";
 import { Blueprint, WeekUnit, UploadedFile, Student, ClassAnalysis, Classroom } from "@/lib/types";
 import { Pinecone } from '@pinecone-database/pinecone';
 import { getPhaseForGrade } from './curriculumHelper';
-import { GENERATION_MODEL, getAIClient } from '@/lib/modelRunner';
+import { generateText, getAIClient } from '@/lib/modelRunner';
+import { cleanText, fence } from '@/lib/promptSafety';
+import { ContentBlockedError } from '@/lib/outputScreen';
+import { attachmentParts } from '@/lib/attachments';
 
 export { getAIClient } from '@/lib/modelRunner';
 
@@ -20,12 +23,7 @@ const getPinecone = () => {
 };
 const indexName = process.env.PINECONE_INDEX_NAME || '';
 
-const SYSTEM_INSTRUCTION = `
-You are EDU-MASTER, a world-class educational content specialist.
-Your goal is to provide structured, curriculum-aligned content.
-`;
-
-// Model names and the Gemini client live in modelRunner.ts.
+// Model names, the Gemini client and the system instruction live in modelRunner.ts / promptSafety.ts.
 const EMBEDDING_MODEL  = 'text-embedding-004';      // stable, no announced deprecation
 const IMAGE_MODEL      = 'imagen-4-fast-generate-001'; // upgraded from imagen-3, $0.02/image
 
@@ -34,30 +32,35 @@ const IMAGE_MODEL      = 'imagen-4-fast-generate-001'; // upgraded from imagen-3
 // matters more than the small extra cost (~$0.018 per call at $9/1M output).
 const THINKING_BUDGET_HIGH = 2048;
 
-/** Sanitize user input to prevent prompt injection */
-export function sanitizeInput(input: string, maxLength = 1000): string {
-  return input
-    .replace(/[<>]/g, '')
-    .replace(/```/g, '')
-    .slice(0, maxLength)
-    .trim();
-}
+/** Default cap for short single-line fields (names, titles, grade, subject). */
+const LINE_MAX = 1000;
+
+/** Clean a short untrusted value onto one line (names, titles, grade, subject). */
+const line = (value: unknown, max = LINE_MAX) => cleanText(value, max, { singleLine: true });
+
+/** Learning styles joined for the prompt, or '' when none are set. */
+const learningStylesOf = (classroom: Classroom) =>
+  Array.isArray(classroom.learningStyles) && classroom.learningStyles.length
+    ? classroom.learningStyles.join(', ')
+    : '';
 
 export async function getCurriculumContext(classroom: Classroom, topic: string): Promise<string> {
+  // Without a vector index there is nothing to retrieve, so skip the (billed) embedding call.
+  const pinecone = getPinecone();
+  if (!pinecone) return "";
+
   const ai = getAIClient();
   const phase = getPhaseForGrade(classroom.grade);
-  
+
   try {
     const response = await ai.models.embedContent({
       model: EMBEDDING_MODEL,
       contents: topic,
     });
-    
+
     const embedding = response.embeddings?.[0]?.values;
     if (!embedding) return "";
 
-    const pinecone = getPinecone();
-    if (!pinecone) return "";
     const index = pinecone.Index(indexName);
     const queryResponse = await index.query({
       vector: embedding,
@@ -79,90 +82,90 @@ export async function getCurriculumContext(classroom: Classroom, topic: string):
   return "";
 }
 
+const BLUEPRINT_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    title: { type: Type.STRING },
+    description: { type: Type.STRING },
+    units: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          weekNumber: { type: Type.INTEGER },
+          topicTitle: { type: Type.STRING },
+          summary: { type: Type.STRING },
+          learningOutcome: { type: Type.STRING }
+        },
+        required: ["weekNumber", "topicTitle", "summary", "learningOutcome"]
+      }
+    }
+  },
+  required: ["title", "description", "units"]
+};
+
 export async function generateBlueprintServer(classroom: Classroom): Promise<Blueprint> {
-  const ai = getAIClient();
+  const styles = learningStylesOf(classroom);
   const prompt = `
     Create a detailed and REALISTIC curriculum blueprint specifically for this class profile:
 
     CLASS PROFILE:
-    - Name: ${sanitizeInput(classroom.name)}
-    - Subject: ${sanitizeInput(classroom.subject)}
-    - Grade: ${sanitizeInput(classroom.grade)}
-    - Standard: ${sanitizeInput(classroom.curriculum)}
+    - Name: ${line(classroom.name)}
+    - Subject: ${line(classroom.subject)}
+    - Grade: ${line(classroom.grade)}
+    - Standard: ${line(classroom.curriculum)}
     - Class Size: ${Number(classroom.studentCount) || 0} students
     - Average Performance: ${Number(classroom.averagePercentile) || 0}% (Adjust difficulty accordingly)
-    - Teacher Notes/Context: "${sanitizeInput(classroom.teachingNotes, 500)}"
-    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `- Learning Styles: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}` : ""}
-    ${classroom.accommodations ? `- Special Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${classroom.studentInterests ? `- Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
+    - Teacher Notes/Context:
+${fence('teacher-notes', classroom.teachingNotes, 500)}
+    ${styles ? `- Learning Styles:\n${fence('learning-styles', styles, 200)}` : ""}
+    ${classroom.accommodations ? `- Special Accommodations:\n${fence('accommodations', classroom.accommodations, 300)}` : ""}
+    ${classroom.studentInterests ? `- Student Interests:\n${fence('student-interests', classroom.studentInterests, 300)}` : ""}
 
     CRITICAL INSTRUCTIONS:
     1. **OPTIMIZATION**: Since the class average is ${Number(classroom.averagePercentile) || 0}%, adjust the pacing and complexity.
        - If < 50%: Include more revision weeks and foundational building blocks.
        - If > 80%: Include extension/enrichment weeks.
-    2. **COMPLETENESS**: Cover all required topics for ${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)}.
+    2. **COMPLETENESS**: Cover all required topics for ${line(classroom.grade)} ${line(classroom.subject)}.
     3. **REALISM**: Assume students are learning this content for the first time.
     4. **STRUCTURE**: Include specific "Review & Consolidation" weeks where appropriate.
-    
+
     I need a structured JSON list of the weekly topics for the FULL YEAR or TERM (based on standard).
   `;
 
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: prompt,
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      temperature: 0.3,
-      thinkingConfig: { thinkingBudget: THINKING_BUDGET_HIGH },
-      responseMimeType: "application/json",
-      responseSchema: {
-        type: Type.OBJECT,
-        properties: {
-          title: { type: Type.STRING },
-          description: { type: Type.STRING },
-          units: {
-            type: Type.ARRAY,
-            items: {
-              type: Type.OBJECT,
-              properties: {
-                weekNumber: { type: Type.INTEGER },
-                topicTitle: { type: Type.STRING },
-                summary: { type: Type.STRING },
-                learningOutcome: { type: Type.STRING }
-              },
-              required: ["weekNumber", "topicTitle", "summary", "learningOutcome"]
-            }
-          }
-        },
-        required: ["title", "description", "units"]
-      }
-    },
+  const text = await generateText({
+    kind: 'blueprint',
+    parts: [{ text: prompt }],
+    temperature: 0.3,
+    thinkingBudget: THINKING_BUDGET_HIGH,
+    json: true,
+    responseSchema: BLUEPRINT_SCHEMA,
   });
-
-  const text = response.text;
-  if (!text) throw new Error("No data returned");
   return JSON.parse(text) as Blueprint;
 }
 
 export async function generateLessonPlanServer(classroom: Classroom, units: WeekUnit[], file?: UploadedFile): Promise<string> {
-  const ai = getAIClient();
   const contextText = await getCurriculumContext(classroom, units[0].topicTitle);
+  const styles = learningStylesOf(classroom);
   const basePrompt = `
     Generate a HIGH-QUALITY TEACHER'S GUIDE (LESSON PLAN) for:
-    Class: ${sanitizeInput(classroom.name)}
-    Subject: ${sanitizeInput(classroom.subject)}
-    Grade: ${sanitizeInput(classroom.grade)}
-    Topic: ${sanitizeInput(units[0].topicTitle)}
-    Outcome: ${sanitizeInput(units[0].learningOutcome)}
-    Context: ${sanitizeInput(units[0].summary)}
+    Class: ${line(classroom.name)}
+    Subject: ${line(classroom.subject)}
+    Grade: ${line(classroom.grade)}
+    Topic: ${line(units[0].topicTitle)}
+    Outcome:
+${fence('learning-outcome', units[0].learningOutcome, 1000)}
+    Context:
+${fence('unit-summary', units[0].summary, 1000)}
 
     CLASS SPECIFICS:
     - Size: ${Number(classroom.studentCount) || 0} students
     - Performance Level: ${Number(classroom.averagePercentile) || 0}% (adjust difficulty accordingly)
-    - Notes: ${sanitizeInput(classroom.teachingNotes, 500)}
-    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `- Learning Styles: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}` : ""}
-    ${classroom.accommodations ? `- Accommodations Needed (CRITICAL): ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${classroom.studentInterests ? `- Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
+    - Notes:
+${fence('teacher-notes', classroom.teachingNotes, 500)}
+    ${styles ? `- Learning Styles:\n${fence('learning-styles', styles, 200)}` : ""}
+    ${classroom.accommodations ? `- Accommodations Needed (CRITICAL):\n${fence('accommodations', classroom.accommodations, 300)}` : ""}
+    ${classroom.studentInterests ? `- Student Interests:\n${fence('student-interests', classroom.studentInterests, 300)}` : ""}
     (Tailor every activity, example, and timing to this specific group.)
 
     ${file ? "CRITICAL: A reference document has been provided. YOU MUST use its terminology, methods, and worked examples to ensure alignment." : ""}
@@ -194,34 +197,25 @@ export async function generateLessonPlanServer(classroom: Classroom, units: Week
     [How to close the lesson and the exit ticket activity]
   `;
 
-  const parts: Part[] = [{ text: basePrompt }];
-  if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
-
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: { parts },
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
-  });
-  return response.text || "Failed to generate lesson plan.";
+  return generateText({ kind: 'lesson-plan', parts: attachmentParts(basePrompt, file), temperature: 0.4 });
 }
 
 export async function generateWorksheetServer(classroom: Classroom, unit: WeekUnit, type: string = "Standard", file?: UploadedFile, userInstruction?: string): Promise<string> {
-  const ai = getAIClient();
   const basePrompt = `
-    Create a ${sanitizeInput(type).toUpperCase()} STUDENT WORKSHEET for:
-    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
-    Topic: ${sanitizeInput(unit.topicTitle)}
+    Create a ${line(type).toUpperCase()} STUDENT WORKSHEET for:
+    Class: ${line(classroom.name)} (${line(classroom.grade)} ${line(classroom.subject)})
+    Topic: ${line(unit.topicTitle)}
 
     Class Average: ${Number(classroom.averagePercentile) || 0}% — adjust difficulty accordingly.
-    ${classroom.accommodations ? `Accommodations (apply throughout): ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${classroom.studentInterests ? `Incorporate these interests in examples where possible: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
-    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
+    ${classroom.accommodations ? `Accommodations (apply throughout):\n${fence('accommodations', classroom.accommodations, 300)}` : ""}
+    ${classroom.studentInterests ? `Incorporate these interests in examples where possible:\n${fence('student-interests', classroom.studentInterests, 300)}` : ""}
+    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION:\n${fence('instruction', userInstruction, 300)}` : ""}
     ${file ? "Reference the attached document for question styles, terminology, and worked examples." : ""}
 
     OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order. Do not include answers.
 
-    # ${sanitizeInput(unit.topicTitle)} — ${sanitizeInput(type)} Worksheet
-    **Subject:** ${sanitizeInput(classroom.subject)} &nbsp;&nbsp; **Grade:** ${sanitizeInput(classroom.grade)} &nbsp;&nbsp; **Total:** [X] marks &nbsp;&nbsp; **Time:** [X] minutes
+    # ${line(unit.topicTitle)} — ${line(type)} Worksheet
+    **Subject:** ${line(classroom.subject)} &nbsp;&nbsp; **Grade:** ${line(classroom.grade)} &nbsp;&nbsp; **Total:** [X] marks &nbsp;&nbsp; **Time:** [X] minutes
 
     ---
 
@@ -235,35 +229,29 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
     [Critical thinking and extension questions. Each question worth 5+ marks.]
   `;
 
-  const parts: Part[] = [{ text: basePrompt }];
-  if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
-
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: { parts },
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
-  });
-  return response.text || "Failed to generate worksheet.";
+  return generateText({ kind: 'worksheet', parts: attachmentParts(basePrompt, file), temperature: 0.4 });
 }
 
 export async function generateAssignmentServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile, userInstruction?: string): Promise<string> {
-  const ai = getAIClient();
+  const styles = learningStylesOf(classroom);
   const basePrompt = `
     Create a HOMEWORK ASSIGNMENT for:
-    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
-    Topic: ${sanitizeInput(unit.topicTitle)}
-    Learning Outcome: ${sanitizeInput(unit.learningOutcome)}
+    Class: ${line(classroom.name)} (${line(classroom.grade)} ${line(classroom.subject)})
+    Topic: ${line(unit.topicTitle)}
+    Learning Outcome:
+${fence('learning-outcome', unit.learningOutcome, 1000)}
 
-    Class Notes: ${sanitizeInput(classroom.teachingNotes, 300)}
-    ${classroom.accommodations ? `Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `Learning Styles: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}` : ""}
-    ${classroom.studentInterests ? `Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
-    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
+    Class Notes:
+${fence('teacher-notes', classroom.teachingNotes, 300)}
+    ${classroom.accommodations ? `Accommodations:\n${fence('accommodations', classroom.accommodations, 300)}` : ""}
+    ${styles ? `Learning Styles:\n${fence('learning-styles', styles, 200)}` : ""}
+    ${classroom.studentInterests ? `Student Interests:\n${fence('student-interests', classroom.studentInterests, 300)}` : ""}
+    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION:\n${fence('instruction', userInstruction, 300)}` : ""}
 
     OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order.
 
-    # ${sanitizeInput(unit.topicTitle)} — Assignment
-    **Subject:** ${sanitizeInput(classroom.subject)} &nbsp;&nbsp; **Grade:** ${sanitizeInput(classroom.grade)} &nbsp;&nbsp; **Due Date:** _______________
+    # ${line(unit.topicTitle)} — Assignment
+    **Subject:** ${line(classroom.subject)} &nbsp;&nbsp; **Grade:** ${line(classroom.grade)} &nbsp;&nbsp; **Due Date:** _______________
 
     ---
 
@@ -276,40 +264,34 @@ export async function generateAssignmentServer(classroom: Classroom, unit: WeekU
     ## Section C — Assessment Rubric
     [A table with: Criteria | Excellent | Satisfactory | Needs Improvement | Marks. Cover the key learning outcome.]
   `;
-  const parts: Part[] = [{ text: basePrompt }];
-  if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: { parts },
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.5 }
-  });
-  return response.text || "Failed to generate assignment.";
+  return generateText({ kind: 'assignment', parts: attachmentParts(basePrompt, file), temperature: 0.5 });
 }
 
 export async function generateAssessmentServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile, userInstruction?: string, scopeUnits?: WeekUnit[]): Promise<string> {
-  const ai = getAIClient();
-  let scopeText = `Topic: ${sanitizeInput(unit.topicTitle)}`;
+  let scopeText = `Topic: ${line(unit.topicTitle)}`;
   if (scopeUnits && scopeUnits.length > 0) {
-    scopeText = `COVERING THE FOLLOWING TOPICS:\n` + scopeUnits.map(u => `- Week ${u.weekNumber}: ${sanitizeInput(u.topicTitle)} (${sanitizeInput(u.summary, 200)})`).join('\n');
+    scopeText = `COVERING THE FOLLOWING TOPICS:\n` + scopeUnits
+      .map(u => `- Week ${Number(u.weekNumber) || 0}: ${line(u.topicTitle)}\n${fence('unit-summary', u.summary, 200)}`)
+      .join('\n');
   }
 
   const basePrompt = `
     Create a FORMAL TEST / ASSESSMENT for:
-    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
+    Class: ${line(classroom.name)} (${line(classroom.grade)} ${line(classroom.subject)})
 
     SCOPE:
     ${scopeText}
 
     Class Average: ${Number(classroom.averagePercentile) || 0}% — ensure an appropriate difficulty curve across sections.
-    ${classroom.accommodations ? `MUST INCLUDE accommodations for: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
+    ${classroom.accommodations ? `MUST INCLUDE accommodations for:\n${fence('accommodations', classroom.accommodations, 300)}` : ""}
+    ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION:\n${fence('instruction', userInstruction, 300)}` : ""}
     ${file ? "Reference the attached document for question style and terminology." : ""}
 
     OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order. Do not include answers.
 
-    # ${sanitizeInput(classroom.subject)} — Formal Assessment
-    **Grade:** ${sanitizeInput(classroom.grade)} &nbsp;&nbsp; **Total:** [X] marks &nbsp;&nbsp; **Time:** [X] minutes
+    # ${line(classroom.subject)} — Formal Assessment
+    **Grade:** ${line(classroom.grade)} &nbsp;&nbsp; **Total:** [X] marks &nbsp;&nbsp; **Time:** [X] minutes
 
     ---
 
@@ -322,35 +304,28 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
     ## Section C — Extended Response ([X] marks)
     [Essay-style or extended problem questions. Show mark allocation and include any scaffolding prompts.]
   `;
-  const parts: Part[] = [{ text: basePrompt }];
-  if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: { parts },
-    config: {
-      systemInstruction: SYSTEM_INSTRUCTION,
-      temperature: 0.3,
-      thinkingConfig: { thinkingBudget: THINKING_BUDGET_HIGH },
-    }
+  return generateText({
+    kind: 'assessment',
+    parts: attachmentParts(basePrompt, file),
+    temperature: 0.3,
+    thinkingBudget: THINKING_BUDGET_HIGH,
   });
-  return response.text || "Failed to generate assessment.";
 }
 
 export async function generateMemoServer(contentToGrade: string, classroom: Classroom): Promise<string> {
-  const ai = getAIClient();
   const prompt = `
     Create a COMPREHENSIVE MEMORANDUM (ANSWER KEY) for the following assessment or worksheet.
-    Subject: ${sanitizeInput(classroom.subject)}
-    Grade: ${sanitizeInput(classroom.grade)}
+    Subject: ${line(classroom.subject)}
+    Grade: ${line(classroom.grade)}
 
     CONTENT TO MARK:
-    ${contentToGrade.slice(0, 8000)}
+${fence('content-to-mark', contentToGrade, 8000)}
 
     OUTPUT FORMAT — CRITICAL: Use EXACTLY these headings in EXACTLY this order.
 
     # Memorandum — Answer Key
-    **Subject:** ${sanitizeInput(classroom.subject)} &nbsp;&nbsp; **Grade:** ${sanitizeInput(classroom.grade)}
+    **Subject:** ${line(classroom.subject)} &nbsp;&nbsp; **Grade:** ${line(classroom.grade)}
     **CONFIDENTIAL — For Teacher Use Only**
 
     ---
@@ -362,24 +337,21 @@ export async function generateMemoServer(contentToGrade: string, classroom: Clas
     [For EACH section and question in the CONTENT TO MARK above, provide the model answer in the same section order as the source document. Use the same section headings as the source (e.g. if source has "Section A — Multiple Choice", mirror that heading here). Show mark allocations. For calculations, show full working. For MCQ, state the correct option letter and a brief reason.]
   `;
 
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: prompt,
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.2 }
-  });
-  return response.text || "Failed to generate memo.";
+  return generateText({ kind: 'memo', parts: [{ text: prompt }], temperature: 0.2 });
 }
 
 export async function generatePresentationServer(classroom: Classroom, units: WeekUnit[]): Promise<string> {
-  const ai = getAIClient();
+  const styles = learningStylesOf(classroom);
   const prompt = `
     Create a SLIDE DECK OUTLINE for:
-    Topic: ${sanitizeInput(units[0].topicTitle)}
-    Learning Outcome: ${sanitizeInput(units[0].learningOutcome)}
-    Context: ${sanitizeInput(units[0].summary, 300)}
-    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
+    Topic: ${line(units[0].topicTitle)}
+    Learning Outcome:
+${fence('learning-outcome', units[0].learningOutcome, 1000)}
+    Context:
+${fence('unit-summary', units[0].summary, 300)}
+    Class: ${line(classroom.name)} (${line(classroom.grade)})
     Student Level: ${Number(classroom.averagePercentile) || 0}% average.
-    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `- Learning Styles: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}` : ""}
+    ${styles ? `- Learning Styles:\n${fence('learning-styles', styles, 200)}` : ""}
 
     OUTPUT FORMAT — CRITICAL: Each slide must follow this exact structure. Use sequential ## headings (## Slide 1, ## Slide 2, etc.) and substitute REAL, topic-specific titles — never use placeholder text in brackets.
 
@@ -398,24 +370,19 @@ export async function generatePresentationServer(classroom: Classroom, units: We
     Now create a complete, topic-specific slide deck for the topic above. Minimum 6 slides. Last slide must be a summary with an exit ticket question. Every slide must use the ## Slide N: [Real Title] / ### Content / ### Speaker Notes / ### Suggested Visual structure.
   `;
 
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: prompt,
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.4 }
-  });
-  return response.text || "Failed to generate slides.";
+  return generateText({ kind: 'presentation', parts: [{ text: prompt }], temperature: 0.4 });
 }
 
 export async function generateGameServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile): Promise<string> {
-  const ai = getAIClient();
+  const styles = learningStylesOf(classroom);
   const basePrompt = `
     Design an engaging CLASSROOM GAME or ACTIVE LEARNING ACTIVITY for:
-    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
-    Topic: ${sanitizeInput(unit.topicTitle)}
+    Class: ${line(classroom.name)} (${line(classroom.grade)})
+    Topic: ${line(unit.topicTitle)}
     Class Size: ${Number(classroom.studentCount) || 0} students.
-    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `Learning Styles to target: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}.` : ""}
-    ${classroom.studentInterests ? `Theme the game around: ${sanitizeInput(classroom.studentInterests, 300)} if possible.` : ""}
-    ${classroom.accommodations ? `Ensure the game accommodates: ${sanitizeInput(classroom.accommodations, 300)}.` : ""}
+    ${styles ? `Learning Styles to target:\n${fence('learning-styles', styles, 200)}` : ""}
+    ${classroom.studentInterests ? `Theme the game around these interests if possible:\n${fence('student-interests', classroom.studentInterests, 300)}` : ""}
+    ${classroom.accommodations ? `Ensure the game accommodates:\n${fence('accommodations', classroom.accommodations, 300)}` : ""}
     ${file ? "Reference the attached document for curriculum alignment." : ""}
 
     OUTPUT FORMAT — CRITICAL: Use EXACTLY these ## headings in EXACTLY this order.
@@ -441,23 +408,15 @@ export async function generateGameServer(classroom: Classroom, unit: WeekUnit, f
     ## Debrief Questions
     [3–5 discussion questions to run after the game to consolidate learning]
   `;
-  const parts: Part[] = [{ text: basePrompt }];
-  if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: { parts },
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.7 }
-  });
-  return response.text || "Failed to generate game.";
+  return generateText({ kind: 'game', parts: attachmentParts(basePrompt, file), temperature: 0.7 });
 }
 
 export async function generateResourcesServer(classroom: Classroom, unit: WeekUnit, file?: UploadedFile): Promise<string> {
-  const ai = getAIClient();
   const basePrompt = `
     Curate a list of EXTRA RESOURCES and ENRICHMENT MATERIAL for:
-    Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
-    Topic: ${sanitizeInput(unit.topicTitle)}
+    Class: ${line(classroom.name)} (${line(classroom.grade)})
+    Topic: ${line(unit.topicTitle)}
     ${file ? "Reference the attached document for context." : ""}
 
     OUTPUT FORMAT — CRITICAL: Use EXACTLY these ## headings in EXACTLY this order.
@@ -477,27 +436,20 @@ export async function generateResourcesServer(classroom: Classroom, unit: WeekUn
     ## Teacher Notes
     [Tips for how to use these resources in class or assign them as homework]
   `;
-  const parts: Part[] = [{ text: basePrompt }];
-  if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
 
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: { parts },
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.5 }
-  });
-  return response.text || "Failed to generate resources.";
+  return generateText({ kind: 'resources', parts: attachmentParts(basePrompt, file), temperature: 0.5 });
 }
 
 export async function refineContentServer(currentContent: string, instruction: string, contextType: string, file?: UploadedFile): Promise<string> {
-  const ai = getAIClient();
   const basePrompt = `
     You are an expert educational editor refining teacher-generated content.
 
-    TEACHER INSTRUCTION: "${sanitizeInput(instruction, 300)}"
+    TEACHER INSTRUCTION:
+${fence('instruction', instruction, 300)}
     ${file ? "A reference document has been attached. Use it to inform your edits." : ""}
 
     CURRENT CONTENT:
-    ${currentContent.slice(0, 30000)}
+${fence('current-content', currentContent, 30000)}
 
     TASK: Rewrite the content to satisfy the teacher's instruction.
 
@@ -507,28 +459,23 @@ export async function refineContentServer(currentContent: string, instruction: s
     3. Return ONLY the updated Markdown. No explanation, no preamble, no commentary.
   `;
 
-  const parts: Part[] = [{ text: basePrompt }];
-  if (file) parts.push({ inlineData: { mimeType: file.mimeType, data: file.data } });
-
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: { parts },
-    config: { systemInstruction: SYSTEM_INSTRUCTION, temperature: 0.3 }
-  });
-  return response.text || currentContent;
+  return generateText({ kind: 'refine', parts: attachmentParts(basePrompt, file), temperature: 0.3 });
 }
 
 export async function analyzeClassPerformanceServer(students: Student[]): Promise<ClassAnalysis> {
-  const ai = getAIClient();
+  // Names and assessment (mark column) names are user-supplied: clean each one before serialising.
   const studentsData = students.map(s => ({
-    name: s.name,
-    average: s.average,
+    name: line(s.name, 200),
+    average: s.average === undefined ? undefined : Number(s.average) || 0,
     marks: s.marks
+      ? Object.fromEntries(Object.entries(s.marks).map(([k, v]) => [line(k, 200), Number(v) || 0]))
+      : undefined,
   }));
 
   const prompt = `
     Analyze the following student performance data.
-    DATA: ${JSON.stringify(studentsData, null, 2).slice(0, 5000)}
+    DATA:
+${fence('student-data', JSON.stringify(studentsData, null, 2), 5000)}
 
     Return JSON:
     {
@@ -538,37 +485,43 @@ export async function analyzeClassPerformanceServer(students: Student[]): Promis
     }
   `;
 
-  const response = await ai.models.generateContent({
-    model: GENERATION_MODEL,
-    contents: prompt,
-    config: { responseMimeType: "application/json", temperature: 0.2 }
-  });
-
-  const text = response.text;
-  if (!text) throw new Error("Analysis failed");
+  const text = await generateText({ kind: 'analyze', parts: [{ text: prompt }], temperature: 0.2, json: true });
   return JSON.parse(text) as ClassAnalysis;
+}
+
+/**
+ * Imagen settings. Strictest safety filter the SDK offers; people limited to adults (no children are
+ * ever depicted). DONT_ALLOW would be stricter still but blocks ordinary classroom scenes.
+ */
+export const IMAGE_CONFIG = {
+  numberOfImages: 1,
+  outputMimeType: 'image/jpeg',
+  aspectRatio: '16:9',
+  safetyFilterLevel: SafetyFilterLevel.BLOCK_LOW_AND_ABOVE,
+  personGeneration: PersonGeneration.ALLOW_ADULT,
+} as const satisfies GenerateImagesConfig;
+
+/** Build the Imagen prompt. Every interpolated value is cleaned onto a single line. */
+export function buildImagePrompt(unit: WeekUnit, description?: string): string {
+  return description
+    ? `Create a clear, educational illustration for a K-12 classroom.
+Subject: ${line(description, 500)}
+Style: textbook-quality diagram or illustration, high contrast, clean lines, suitable for printing or projecting in class.`
+    : `Create an educational illustration suitable for a slide or worksheet.
+Topic: ${line(unit.topicTitle)}
+Concept: ${line(unit.summary, 300)}
+Style: Clear, textbook-style illustration, suitable for K-12 education. High contrast, clean lines.`;
 }
 
 export async function generateEducationalImageServer(unit: WeekUnit, description?: string): Promise<string> {
   const ai = getAIClient();
-  const prompt = description
-    ? `Create a clear, educational illustration for a K-12 classroom.
-Subject: ${sanitizeInput(description, 500)}
-Style: textbook-quality diagram or illustration, high contrast, clean lines, suitable for printing or projecting in class.`
-    : `Create an educational illustration suitable for a slide or worksheet.
-Topic: ${sanitizeInput(unit.topicTitle)}
-Concept: ${sanitizeInput(unit.summary, 300)}
-Style: Clear, textbook-style illustration, suitable for K-12 education. High contrast, clean lines.`;
+  const prompt = buildImagePrompt(unit, description);
 
   try {
     const response = await ai.models.generateImages({
       model: IMAGE_MODEL,
       prompt,
-      config: {
-        numberOfImages: 1,
-        outputMimeType: 'image/jpeg',
-        aspectRatio: '16:9',
-      },
+      config: { ...IMAGE_CONFIG },
     });
 
     if (response.generatedImages && response.generatedImages.length > 0) {
@@ -578,6 +531,7 @@ Style: Clear, textbook-style illustration, suitable for K-12 education. High con
     return '';
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : String(error);
+    if (/safety|block/i.test(msg)) throw new ContentBlockedError('SAFETY');
     console.error('Image generation failed', msg);
     throw error;
   }
