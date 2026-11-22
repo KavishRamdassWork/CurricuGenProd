@@ -264,3 +264,74 @@ test.describe('screenOutput: JSON kinds', () => {
     });
   }
 });
+
+test.describe('screenOutput: anchors with scripted or bare attributes', () => {
+  const anchors = [
+    '<a href="javascript:alert(1)">click</a>',
+    '<a href="javascript:alert(1)" download>click</a>',
+    '<a href=x hidden>click</a>',
+    '<a href="x"class="y">click</a>',
+    '<a href>click</a>',
+    '<A HREF="javascript:alert(1)">click</A>',
+    '<a/href="javascript:alert(1)">click</a>',
+    '<a\nhref="javascript:alert(1)">click</a>',
+    '<a onmouseover=alert(1)>click</a>',
+    '<a>click</a>',
+  ];
+
+  for (const anchor of anchors) {
+    test(`neutralises ${JSON.stringify(anchor)}`, () => {
+      const out = screenOutput('worksheet', `before ${anchor} after`);
+      expect(out).not.toMatch(/<a[\s/>]/i);
+      expect(out).not.toContain('javascript:');
+      expect(out).toContain('click');
+    });
+  }
+
+  test('maths that looks like an anchor opening is left alone', () => {
+    for (const s of ['x<a and y>b', 'a<b and c>d', 'if x<a and y>3 then']) {
+      expect(screenOutput('worksheet', s)).toBe(s);
+    }
+  });
+});
+
+test.describe('screenOutput: pathological input stays fast', () => {
+  const N = 300_000;
+  const inputs: Array<[string, string]> = [
+    ['repeated [', '['.repeat(N)],
+    ['repeated ![', '!['.repeat(N / 2)],
+    ['repeated [a](', '[a]('.repeat(N / 5)],
+    ['repeated ![a](', '![a]('.repeat(N / 6)],
+    ['repeated unclosed <script>', '<script>'.repeat(N / 8)],
+    ['repeated unclosed <style>', '<style>'.repeat(N / 7)],
+    ['repeated <a href= with no >', '<a href='.repeat(N / 8)],
+    ['repeated <script with no >', '<script '.repeat(N / 8)],
+    ['unclosed link target', '[a](' + 'x'.repeat(N)],
+    ['unclosed label', '[' + 'x'.repeat(N)],
+  ];
+
+  for (const kind of ['worksheet', 'resources'] as GenKind[]) {
+    for (const [name, input] of inputs) {
+      test(`${kind}: ${name} completes in under 1s`, () => {
+        const body = validFor(kind, input);
+        const started = Date.now();
+        const out = screenOutput(kind, body);
+        const elapsed = Date.now() - started;
+        expect(typeof out).toBe('string');
+        expect(elapsed).toBeLessThan(1000);
+      });
+    }
+  }
+
+  test('many closed script blocks are removed quickly', () => {
+    const input = '<script>x</script>y'.repeat(15_000);
+    const started = Date.now();
+    const out = screenOutput('worksheet', input);
+    expect(Date.now() - started).toBeLessThan(1000);
+    expect(out).toBe('y'.repeat(15_000));
+  });
+
+  test('legitimate nested-paren link targets still rewrite', () => {
+    expect(screenOutput('worksheet', 'see [Foo](https://en.wikipedia.org/wiki/Foo_(bar)) ok')).toBe('see Foo ok');
+  });
+});
