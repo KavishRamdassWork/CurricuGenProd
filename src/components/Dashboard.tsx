@@ -175,7 +175,7 @@ const Dashboard = () => {
         const data = await res.json();
         if (!res.ok) {
           if (data.code === 'LIMIT_REACHED') {
-            if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+            if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for a much higher daily limit?')) window.location.href = '/pricing';
           } else if (['FAIR_USE_LIMIT', 'CONTENT_BLOCKED', 'GENERATION_DISABLED'].includes(data.code) && data.error) {
             // Fair-use (Beta/Pro), blocked content and the kill switch: show the server's text, no upgrade prompt.
             alert(data.error);
@@ -410,7 +410,7 @@ const Dashboard = () => {
               {dbUser.plan === 'PRO' || dbUser.plan === 'BETA' ? (
                 <div className="flex items-center gap-2">
                   <Crown className={`w-3.5 h-3.5 ${dbUser.plan === 'PRO' ? 'text-amber-400' : 'text-blue-400'}`} /> 
-                  {dbUser.plan === 'PRO' ? 'Pro Plan' : 'Beta Tester'} — Unlimited
+                  {dbUser.plan === 'PRO' ? 'Pro Plan' : 'Beta Tester'} — fair use
                 </div>
               ) : (
                 <div className="flex items-center justify-between">

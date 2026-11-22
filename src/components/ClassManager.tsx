@@ -162,7 +162,9 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
       }));
     } catch (err) {
       console.error(err);
-      alert("Failed to analyze data.");
+      const apiErr = err as { code?: string; message?: string };
+      const serverCodes = ['FAIR_USE_LIMIT', 'CONTENT_BLOCKED', 'GENERATION_DISABLED', 'LIMIT_REACHED'];
+      alert(apiErr.code && serverCodes.includes(apiErr.code) && apiErr.message ? apiErr.message : "Failed to analyze data.");
     } finally {
       setIsAnalyzing(false);
       if (fileInputRef.current) fileInputRef.current.value = '';

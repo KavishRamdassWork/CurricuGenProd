@@ -96,7 +96,7 @@ export async function requireGenerationAccess(): Promise<GuardResult> {
 
   if (remaining === null) {
     const body = plan === 'FREE'
-      ? { error: 'Daily free generation limit reached. Come back tomorrow or upgrade to Pro for unlimited generations.', code: 'LIMIT_REACHED' }
+      ? { error: 'Daily free generation limit reached. Come back tomorrow or upgrade to Pro for a much higher daily limit.', code: 'LIMIT_REACHED' }
       : { error: "You have reached today's fair-use limit. It resets tomorrow.", code: 'FAIR_USE_LIMIT' };
     return { ok: false, response: NextResponse.json(body, { status: 402 }) };
   }

@@ -18,7 +18,7 @@ This repository represents a major architectural upgrade from a basic React/Vite
 3. **Database Integration (Prisma + PostgreSQL/SQLite)**
    - **Why:** Persistent storage was added to track user quotas, save generated lesson plans, and manage class profiles. Prisma provides type-safe database access, ensuring data integrity.
 4. **Stripe/PayFast Subscription Gateway**
-   - **Why:** The platform now supports a freemium model. Educators get a limited number of free generations before being prompted to upgrade to a Pro tier for unlimited access. We implemented robust webhook handlers to automatically update user subscription statuses upon successful payment.
+   - **Why:** The platform now supports a freemium model. Educators get a limited number of free generations before being prompted to upgrade to a Pro tier for a much higher daily limit (fair use). We implemented robust webhook handlers to automatically update user subscription statuses upon successful payment.
 5. **Dynamic AI Syllabus Ingestion (Curriculum Rules)**
    - **Why:** Instead of generic prompts, the AI now uses dynamic system instructions based on the selected curriculum standard (e.g., South African CAPS). We added a pipeline to ingest official syllabus PDFs, ensuring that the generated lesson plans strictly adhere to official outcomes and standards.
 6. **Advanced Student Profiling**
@@ -77,7 +77,17 @@ Follow these steps to clone the repository and run the project locally on any co
    # PayFast / Stripe (Optional for local testing)
    PAYFAST_MERCHANT_ID=...
    PAYFAST_MERCHANT_KEY=...
+
+   # Beta access (optional): comma-separated list of tester emails
+   BETA_TESTER_EMAILS=tester1@example.com,tester2@example.com
+
+   # Kill switch (optional): set to "true" to stop all AI generation
+   # AI_GENERATION_DISABLED=true
    ```
+
+   **Access and safety variables**
+   - `BETA_TESTER_EMAILS` is a comma-separated list of email addresses and is the source of truth for beta access. It is resolved on every request, so removing an email ends that person's beta access on their next request. Stored `BETA` plan rows whose email is not on the list count as `FREE`. Put the owner's own address here to test beta access.
+   - `AI_GENERATION_DISABLED=true` is a kill switch: every `/api/generate/*` route returns `503` until it is unset. Use it to stop spend immediately.
 
 4. **Initialize the Database**
    Push the schema to your database to set up the necessary tables (Users, Classrooms, etc.).
@@ -97,10 +107,11 @@ To run the automated API and security tests:
 ```bash
 npx playwright test
 ```
+A manual live prompt-injection smoke test (real Gemini key, never run by default) lives in `tests/live/injection-smoke.spec.ts`; it is skipped unless `RUN_LIVE_INJECTION_SMOKE=1` and `GEMINI_API_KEY` are set.
 
 ## 📖 How It Works
 
 1. **Setup a Class Profile:** Educators input their class demographics, average percentiles, learning styles, and required syllabus.
 2. **Blueprint Generation:** The application interfaces with the Gemini API using strict syllabus-aligned system instructions to generate a term blueprint.
 3. **Deep Dive Generation:** Educators can select specific weeks to generate granular materials—slides, worksheets, games, and assessments.
-4. **Credit Tracking:** Each generation checks the user's database record. Free-tier users consume credits, while Pro users have unlimited access. 
+4. **Credit Tracking:** Each generation checks the user's database record. Free-tier users get 10 generations a day, Beta testers 200 and Pro users a fair-use ceiling of 300 a day.

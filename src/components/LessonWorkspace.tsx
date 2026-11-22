@@ -186,7 +186,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
     } catch (e: unknown) {
       const err = asGenerationError(e);
       if (err.code === 'LIMIT_REACHED') {
-        if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+        if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for a much higher daily limit?')) window.location.href = '/pricing';
       } else if (showsServerMessage(err)) {
         alert(err.message);
       } else if (type === 'visuals' && err.message && (err.message.includes('400') || err.message.includes('429') || err.message.includes('paid plan') || err.message.includes('Quota'))) {
@@ -223,7 +223,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
     } catch (e: unknown) {
       const err = asGenerationError(e);
       if (err.code === 'LIMIT_REACHED') {
-        if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+        if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for a much higher daily limit?')) window.location.href = '/pricing';
       } else if (showsServerMessage(err)) {
         alert(err.message);
       } else {
@@ -270,7 +270,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
     } catch (e: unknown) {
       const err = asGenerationError(e);
       if (err.code === 'LIMIT_REACHED') {
-        if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+        if (window.confirm('You have reached your daily limit of 10 free generations.\\n\\nWould you like to upgrade to Pro for a much higher daily limit?')) window.location.href = '/pricing';
       } else if (showsServerMessage(err)) {
         alert(err.message);
       } else {
@@ -937,7 +937,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                         } catch (e: unknown) {
                           const err = asGenerationError(e);
                           if (err.code === 'LIMIT_REACHED') {
-                            if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for unlimited access?')) window.location.href = '/pricing';
+                            if (window.confirm('You have reached your daily limit of 10 free generations.\n\nWould you like to upgrade to Pro for a much higher daily limit?')) window.location.href = '/pricing';
                           } else if (showsServerMessage(err)) {
                             alert(err.message);
                           } else {

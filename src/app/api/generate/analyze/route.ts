@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { analyzeClassPerformanceServer } from '@/lib/aiService';
 import { requireGenerationAccess } from '@/lib/authGuard';
 import { handleGenerationError } from '@/lib/generationErrors';
+import { auditPromptInputs } from '@/lib/promptSafety';
 import { Student } from '@/lib/types';
 import { z } from 'zod';
 
@@ -21,6 +22,7 @@ export async function POST(req: NextRequest) {
   if (!guard.ok) return guard.response;
   try {
     const { students } = schema.parse(await req.json());
+    auditPromptInputs('analyze', guard.dbUser.id, students.map((s) => s.name));
     const analysis = await analyzeClassPerformanceServer(students as Student[]);
     return NextResponse.json({ analysis });
   } catch (error: unknown) {

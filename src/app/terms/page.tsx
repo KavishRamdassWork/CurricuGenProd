@@ -95,8 +95,9 @@ export default function TermsPage() {
         </Clause>
         <Clause id="4.2">
           <strong>Pro plan.</strong> {PRO_PRICE_DISPLAY} per month (ZAR, including VAT where applicable), a recurring
-          subscription removing the free daily generation limit and including a higher daily image allowance (currently 10).
-          &ldquo;Unlimited&rdquo; use is subject to reasonable, personal, professional use. We may apply technical rate
+          subscription raising the free daily generation limit to a fair-use ceiling and including a higher daily image
+          allowance (currently 10). The fair-use ceiling is currently 300 generations a day and may change with
+          reasonable notice. Use is subject to reasonable, personal, professional use. We may apply technical rate
           limits to protect the Service and may restrict accounts whose use is clearly abusive or automated.
         </Clause>
         <Clause id="4.3">

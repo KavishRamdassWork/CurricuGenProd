@@ -79,7 +79,7 @@ export default function PricingPage() {
             Supercharge your teaching with <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-indigo-400">CurricuGen Pro</span>
           </h1>
           <p className="text-lg md:text-xl text-slate-400">
-            Stop spending hours strictly planning. Get unlimited access to AI curriculum generation, saving you 15+ hours every week.
+            Stop spending hours strictly planning. Get fair-use access to AI curriculum generation, with up to 300 generations a day, saving you 15+ hours every week.
           </p>
         </div>
 
@@ -113,7 +113,7 @@ export default function PricingPage() {
             
             <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 flex items-start gap-3 mb-8">
               <Info className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-400 leading-relaxed">Your free generations reset daily. Upgrading unlocks unlimited generation.</p>
+              <p className="text-xs text-slate-400 leading-relaxed">Your free generations reset daily. Upgrading raises your daily limit to a fair-use ceiling of up to 300 generations a day.</p>
             </div>
 
             <button 
@@ -145,9 +145,9 @@ export default function PricingPage() {
             
             <ul className="space-y-4 mb-10 flex-1">
               {[
-                { text: 'Unlimited curriculum generations', highlighted: true },
-                { text: 'Unlimited lesson plans & worksheets' },
-                { text: 'Unlimited formal assessments & memos' },
+                { text: 'Up to 300 curriculum generations a day (fair use)', highlighted: true },
+                { text: 'Lesson plans & worksheets within the daily fair-use limit' },
+                { text: 'Formal assessments & memos within the daily fair-use limit' },
                 { text: 'Classroom performance analysis' },
                 { text: 'Future updates (Slides & Games)', future: true },
                 { text: 'Priority 24/7 support', future: true },
