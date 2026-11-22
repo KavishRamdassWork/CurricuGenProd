@@ -156,7 +156,9 @@ export default function TermsPage() {
       <Section n={6} title="Privacy and personal information">
         <Clause id="6.1">
           We process personal information in line with the Protection of Personal Information Act 4 of 2013 (&ldquo;
-          <strong>POPIA</strong>&rdquo;). We collect your name, email address and profile image (from sign-in), your plan
+          <strong>POPIA</strong>&rdquo;). Our full{' '}
+          <Link href="/privacy" className={link}>Privacy Policy</Link> explains what we do with it and your rights; in
+          summary, we collect your name, email address and profile image (from sign-in), your plan
           and usage counters, payment status records (PayFast references and amounts, not card numbers), and Your Content.
           We use it to provide, secure, support and bill for the Service, to meet legal obligations and to improve
           reliability. We do not sell personal information.

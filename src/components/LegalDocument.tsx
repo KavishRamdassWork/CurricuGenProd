@@ -20,6 +20,7 @@ export function LegalDocument({
           <span className="flex-1" />
           <Link href="/terms" className="text-blue-400 hover:text-blue-300">Licence Agreement</Link>
           <Link href="/refund-policy" className="text-blue-400 hover:text-blue-300">Refund Policy</Link>
+          <Link href="/privacy" className="text-blue-400 hover:text-blue-300">Privacy Policy</Link>
           <Link href="/pricing" className="text-blue-400 hover:text-blue-300">Pricing</Link>
         </nav>
 

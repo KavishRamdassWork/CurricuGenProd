@@ -20,6 +20,8 @@ export const LEGAL = {
   supportEmail: '[SUPPORT EMAIL ADDRESS]',
   supportPhone: '[OPTIONAL: SUPPORT PHONE NUMBER]',
   informationOfficerEmail: '[INFORMATION OFFICER EMAIL ADDRESS]',
+  /** Named in the Privacy Policy, e.g. "Vercel and Neon". */
+  hostingProviders: '[HOSTING AND DATABASE PROVIDER NAMES]',
 
   // ---- Versioning: bump `version` whenever either document changes materially ----
   /** Recorded alongside a buyer's acceptance at checkout. */

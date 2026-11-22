@@ -54,6 +54,7 @@ export default async function RootPage() {
             <Link href="/pricing" className="hover:text-slate-300 underline-offset-2 hover:underline">Pricing</Link>
             <Link href="/terms" className="hover:text-slate-300 underline-offset-2 hover:underline">Licence Agreement</Link>
             <Link href="/refund-policy" className="hover:text-slate-300 underline-offset-2 hover:underline">Refund Policy</Link>
+            <Link href="/privacy" className="hover:text-slate-300 underline-offset-2 hover:underline">Privacy Policy</Link>
           </p>
         </div>
       </div>

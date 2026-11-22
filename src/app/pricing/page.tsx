@@ -236,7 +236,7 @@ export default function PricingPage() {
             </div>
             <div>
               <h4 className="font-bold text-slate-200 mb-2">Where is the full small print?</h4>
-              <p className="text-sm text-slate-400 leading-relaxed">Read the <Link href="/terms" className="text-blue-400 hover:text-blue-300 underline">End User Licence Agreement</Link> and the <Link href="/refund-policy" className="text-blue-400 hover:text-blue-300 underline">Refund, Cancellation &amp; Delivery Policy</Link>.</p>
+              <p className="text-sm text-slate-400 leading-relaxed">Read the <Link href="/terms" className="text-blue-400 hover:text-blue-300 underline">End User Licence Agreement</Link>, the <Link href="/refund-policy" className="text-blue-400 hover:text-blue-300 underline">Refund, Cancellation &amp; Delivery Policy</Link> and the <Link href="/privacy" className="text-blue-400 hover:text-blue-300 underline">Privacy Policy</Link>.</p>
             </div>
           </div>
         </div>
