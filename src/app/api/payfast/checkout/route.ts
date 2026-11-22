@@ -1,15 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { prisma } from "@/lib/prisma";
-import { generatePayFastSignature } from "@/lib/payfast";
+import { generatePayFastSignature, payfastHost, PRO_PRICE_ZAR } from "@/lib/payfast";
 
 // Use sandbox credentials if in development, otherwise env vars
 const MERCHANT_ID = process.env.PAYFAST_MERCHANT_ID || '10000100';
 const MERCHANT_KEY = process.env.PAYFAST_MERCHANT_KEY || '46f0cd694581a';
 const PASSPHRASE = process.env.PAYFAST_PASSPHRASE || '';
-const PAYFAST_URI = process.env.NODE_ENV === 'production' && process.env.PAYFAST_MERCHANT_ID
-  ? 'https://www.payfast.co.za/eng/process'
-  : 'https://sandbox.payfast.co.za/eng/process';
+const PAYFAST_URI = `https://${payfastHost()}/eng/process`;
 
 export async function POST(_req: NextRequest) {
   try {
@@ -41,12 +39,12 @@ export async function POST(_req: NextRequest) {
       name_first: dbUser.name?.split(' ')[0] || 'Teacher',
       email_address: dbUser.email,
       m_payment_id: `EDU_${Date.now()}`,
-      amount: '180.00', // R180.00 ZAR (~$10 USD)
+      amount: PRO_PRICE_ZAR, // R180.00 ZAR (~$10 USD)
       item_name: 'CurricuGen Pro Subscription (1 Month)',
       custom_str1: userId, // Pass clerk ID to webhook
       subscription_type: '1', // 1 = Subscription
       billing_date: new Date().toISOString().split('T')[0],
-      recurring_amount: '180.00',
+      recurring_amount: PRO_PRICE_ZAR,
       frequency: '3', // 3 = Monthly
       cycles: '0', // 0 = indefinite
     };

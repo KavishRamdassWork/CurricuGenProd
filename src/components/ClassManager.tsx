@@ -1,5 +1,6 @@
 'use client';
 
+import { MAX_SPREADSHEET_BYTES } from '@/lib/uploadLimits';
 import React, { useState, useRef, useEffect } from 'react';
 import { Classroom, Student } from '@/lib/types';
 import { CURRICULUMS, GRADES, SUBJECTS_COMMON } from '@/lib/constants';
@@ -135,7 +136,12 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
 
   const handleUploadMarks = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file || !activeAnalysisClass) return;
+    if (file.size > MAX_SPREADSHEET_BYTES) {
+      alert(`That spreadsheet is too large. The limit is ${Math.round(MAX_SPREADSHEET_BYTES / (1024 * 1024))} MB.`);
+      return;
+    }
     setIsAnalyzing(true);
     try {
       const { students, assessmentNames } = await parseMarksTemplate(file);

@@ -47,3 +47,7 @@ next-env.d.ts
 
 # manual debug scripts (not part of build or test suite)
 /debug-scripts/*.log
+
+# playwright output (generated per run; may embed traces and request data)
+/playwright-report/
+/test-results/

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateEducationalImageServer } from '@/lib/aiService';
-import { requireImageAccess, consumeImageGeneration } from '@/lib/authGuard';
+import { requireImageAccess, refundImage } from '@/lib/authGuard';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -13,6 +13,9 @@ const schema = z.object({
   description: z.string().max(500).optional(),
 });
 
+// Gemini calls (55 s timeout, one retry) need more than the platform default.
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
   const guard = await requireImageAccess();
   if (!guard.ok) return guard.response;
@@ -21,9 +24,11 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const { unit, description } = schema.parse(body);
     const imageUrl = await generateEducationalImageServer(unit, description);
-    await consumeImageGeneration(guard.dbUser.id);
+    // Gemini can answer with no image (e.g. filtered); don't charge the credit for that.
+    if (!imageUrl) await refundImage(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ imageUrl });
   } catch (error: unknown) {
+    await refundImage(guard.dbUser.id, guard.dbUser.plan);
     const msg = error instanceof Error ? error.message : String(error);
     console.error('Image generation error:', msg);
 

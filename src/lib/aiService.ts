@@ -40,10 +40,19 @@ const IMAGE_MODEL      = 'imagen-4-fast-generate-001'; // upgraded from imagen-3
 // matters more than the small extra cost (~$0.018 per call at $9/1M output).
 const THINKING_BUDGET_HIGH = 2048;
 
+/** Per-request ceiling for Gemini calls (ms). Routes declare maxDuration = 120 s to leave room for one retry. */
+const GEMINI_REQUEST_TIMEOUT_MS = 55_000;
+
 export function getAIClient() {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error("GEMINI_API_KEY is not configured on the server.");
-  return new GoogleGenAI({ apiKey });
+  // Bound every upstream call. Without a timeout a hung Gemini request holds the route (and the
+  // user's reserved credit) until the platform kills it. Two attempts total: one retry absorbs a
+  // transient 429/503 without multiplying worst-case latency, and stays inside GENERATION_MAX_SECONDS.
+  return new GoogleGenAI({
+    apiKey,
+    httpOptions: { timeout: GEMINI_REQUEST_TIMEOUT_MS, retryOptions: { attempts: 2 } },
+  });
 }
 
 /** Sanitize user input to prevent prompt injection */
@@ -83,7 +92,7 @@ export async function getCurriculumContext(classroom: Classroom, topic: string):
     });
 
     if (queryResponse.matches && queryResponse.matches.length > 0) {
-      return queryResponse.matches.map(m => m.metadata?.content).join("\\n\\n");
+      return queryResponse.matches.map(m => m.metadata?.content).join("\n\n");
     }
   } catch (error) {
     console.warn("Vector DB error (or no pilot context found):", error);
@@ -101,15 +110,15 @@ export async function generateBlueprintServer(classroom: Classroom): Promise<Blu
     - Subject: ${sanitizeInput(classroom.subject)}
     - Grade: ${sanitizeInput(classroom.grade)}
     - Standard: ${sanitizeInput(classroom.curriculum)}
-    - Class Size: ${classroom.studentCount} students
-    - Average Performance: ${classroom.averagePercentile}% (Adjust difficulty accordingly)
+    - Class Size: ${Number(classroom.studentCount) || 0} students
+    - Average Performance: ${Number(classroom.averagePercentile) || 0}% (Adjust difficulty accordingly)
     - Teacher Notes/Context: "${sanitizeInput(classroom.teachingNotes, 500)}"
-    ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
+    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `- Learning Styles: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}` : ""}
     ${classroom.accommodations ? `- Special Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
     ${classroom.studentInterests ? `- Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
 
     CRITICAL INSTRUCTIONS:
-    1. **OPTIMIZATION**: Since the class average is ${classroom.averagePercentile}%, adjust the pacing and complexity.
+    1. **OPTIMIZATION**: Since the class average is ${Number(classroom.averagePercentile) || 0}%, adjust the pacing and complexity.
        - If < 50%: Include more revision weeks and foundational building blocks.
        - If > 80%: Include extension/enrichment weeks.
     2. **COMPLETENESS**: Cover all required topics for ${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)}.
@@ -169,10 +178,10 @@ export async function generateLessonPlanServer(classroom: Classroom, units: Week
     Context: ${sanitizeInput(units[0].summary)}
 
     CLASS SPECIFICS:
-    - Size: ${classroom.studentCount} students
-    - Performance Level: ${classroom.averagePercentile}% (adjust difficulty accordingly)
+    - Size: ${Number(classroom.studentCount) || 0} students
+    - Performance Level: ${Number(classroom.averagePercentile) || 0}% (adjust difficulty accordingly)
     - Notes: ${sanitizeInput(classroom.teachingNotes, 500)}
-    ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
+    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `- Learning Styles: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}` : ""}
     ${classroom.accommodations ? `- Accommodations Needed (CRITICAL): ${sanitizeInput(classroom.accommodations, 300)}` : ""}
     ${classroom.studentInterests ? `- Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
     (Tailor every activity, example, and timing to this specific group.)
@@ -224,7 +233,7 @@ export async function generateWorksheetServer(classroom: Classroom, unit: WeekUn
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)} ${sanitizeInput(classroom.subject)})
     Topic: ${sanitizeInput(unit.topicTitle)}
 
-    Class Average: ${classroom.averagePercentile}% — adjust difficulty accordingly.
+    Class Average: ${Number(classroom.averagePercentile) || 0}% — adjust difficulty accordingly.
     ${classroom.accommodations ? `Accommodations (apply throughout): ${sanitizeInput(classroom.accommodations, 300)}` : ""}
     ${classroom.studentInterests ? `Incorporate these interests in examples where possible: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
     ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
@@ -268,7 +277,7 @@ export async function generateAssignmentServer(classroom: Classroom, unit: WeekU
 
     Class Notes: ${sanitizeInput(classroom.teachingNotes, 300)}
     ${classroom.accommodations ? `Accommodations: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
-    ${classroom.learningStyles?.length ? `Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
+    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `Learning Styles: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}` : ""}
     ${classroom.studentInterests ? `Student Interests: ${sanitizeInput(classroom.studentInterests, 300)}` : ""}
     ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
 
@@ -313,7 +322,7 @@ export async function generateAssessmentServer(classroom: Classroom, unit: WeekU
     SCOPE:
     ${scopeText}
 
-    Class Average: ${classroom.averagePercentile}% — ensure an appropriate difficulty curve across sections.
+    Class Average: ${Number(classroom.averagePercentile) || 0}% — ensure an appropriate difficulty curve across sections.
     ${classroom.accommodations ? `MUST INCLUDE accommodations for: ${sanitizeInput(classroom.accommodations, 300)}` : ""}
     ${userInstruction ? `IMPORTANT TEACHER INSTRUCTION: "${sanitizeInput(userInstruction, 300)}"` : ""}
     ${file ? "Reference the attached document for question style and terminology." : ""}
@@ -390,8 +399,8 @@ export async function generatePresentationServer(classroom: Classroom, units: We
     Learning Outcome: ${sanitizeInput(units[0].learningOutcome)}
     Context: ${sanitizeInput(units[0].summary, 300)}
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
-    Student Level: ${classroom.averagePercentile}% average.
-    ${classroom.learningStyles?.length ? `- Learning Styles: ${classroom.learningStyles.join(', ')}` : ""}
+    Student Level: ${Number(classroom.averagePercentile) || 0}% average.
+    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `- Learning Styles: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}` : ""}
 
     OUTPUT FORMAT — CRITICAL: Each slide must follow this exact structure. Use sequential ## headings (## Slide 1, ## Slide 2, etc.) and substitute REAL, topic-specific titles — never use placeholder text in brackets.
 
@@ -424,8 +433,8 @@ export async function generateGameServer(classroom: Classroom, unit: WeekUnit, f
     Design an engaging CLASSROOM GAME or ACTIVE LEARNING ACTIVITY for:
     Class: ${sanitizeInput(classroom.name)} (${sanitizeInput(classroom.grade)})
     Topic: ${sanitizeInput(unit.topicTitle)}
-    Class Size: ${classroom.studentCount} students.
-    ${classroom.learningStyles?.length ? `Learning Styles to target: ${classroom.learningStyles.join(', ')}.` : ""}
+    Class Size: ${Number(classroom.studentCount) || 0} students.
+    ${Array.isArray(classroom.learningStyles) && classroom.learningStyles.length ? `Learning Styles to target: ${sanitizeInput(classroom.learningStyles.join(', '), 200)}.` : ""}
     ${classroom.studentInterests ? `Theme the game around: ${sanitizeInput(classroom.studentInterests, 300)} if possible.` : ""}
     ${classroom.accommodations ? `Ensure the game accommodates: ${sanitizeInput(classroom.accommodations, 300)}.` : ""}
     ${file ? "Reference the attached document for curriculum alignment." : ""}

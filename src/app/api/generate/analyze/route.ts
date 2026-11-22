@@ -12,6 +12,9 @@ const schema = z.object({
   })).max(200),
 });
 
+// Gemini calls (55 s timeout, one retry) need more than the platform default.
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
   const guard = await requireGenerationAccess();
   if (!guard.ok) return guard.response;

@@ -68,3 +68,55 @@ export async function refundGenerationCredit(userId: string): Promise<void> {
     console.error('Failed to refund generation credit:', error);
   }
 }
+
+// ─── Image credits ──────────────────────────────────────────────────────────
+// Same reserve-then-refund design as text generations: the old flow read the balance, generated the
+// image, then decremented, so parallel requests could all pass the check.
+
+/** Daily image allowance per plan. */
+export const IMAGE_LIMITS: Record<string, number> = { FREE: 1, PRO: 10, BETA: 10 };
+
+export function dailyImageLimit(plan: string): number {
+  return IMAGE_LIMITS[plan] ?? 1;
+}
+
+/**
+ * Atomically take one image credit. Returns the credits remaining, or null when none are left.
+ * A new day resets the balance to the plan's allowance; only one racing request performs the reset
+ * (the WHERE clause stops matching once `lastImageDate` is today).
+ */
+export async function reserveImageCredit(userId: string, plan: string, now: Date = new Date()): Promise<number | null> {
+  const limit = dailyImageLimit(plan);
+
+  await prisma.user.updateMany({
+    where: {
+      id: userId,
+      OR: [{ lastImageDate: null }, { lastImageDate: { lt: startOfDay(now) } }],
+    },
+    data: { imagesLeft: limit, lastImageDate: now },
+  });
+
+  try {
+    const updated = await prisma.user.update({
+      where: { id: userId, imagesLeft: { gt: 0 } },
+      data: { imagesLeft: { decrement: 1 }, lastImageDate: now },
+      select: { imagesLeft: true },
+    });
+    return updated.imagesLeft;
+  } catch (error) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2025') return null;
+    throw error;
+  }
+}
+
+/** Give back a reserved image credit after a failed generation. Capped at the plan allowance; never throws. */
+export async function refundImageCredit(userId: string, plan: string): Promise<void> {
+  try {
+    await prisma.user.updateMany({
+      where: { id: userId, imagesLeft: { lt: dailyImageLimit(plan) } },
+      data: { imagesLeft: { increment: 1 } },
+    });
+  } catch (error) {
+    console.error('Failed to refund image credit:', error);
+  }
+}

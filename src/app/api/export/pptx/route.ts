@@ -4,20 +4,25 @@ import { auth } from '@clerk/nextjs/server';
 import PptxGenJS from 'pptxgenjs';
 import { parseSlideMarkdown } from '@/lib/slideParser';
 import buildRateLimit from '@/lib/rateLimit';
+import { z } from 'zod';
+import { IMAGE_DATA_URI } from '@/lib/uploadLimits';
 
 const exportLimiter = buildRateLimit({ uniqueTokenPerInterval: 500, interval: 60000 });
 
-interface ExportPptxBody {
-  slidesMarkdown: string;
-  slideImages: { slideNumber: number; imageUrl: string }[];
-  title: string;
-  metadata: {
-    subject?: string;
-    grade?: string;
-    schoolName?: string;
-    logo?: string | null; // base64 data URI
-  };
-}
+// Images are embedded as data URIs only (never fetched), and must be small raster images.
+const imageDataUri = z.string().max(4_000_000).regex(IMAGE_DATA_URI);
+
+const exportSchema = z.object({
+  slidesMarkdown: z.string().min(1).max(200_000),
+  slideImages: z.array(z.object({ slideNumber: z.number().int().min(0).max(500), imageUrl: imageDataUri })).max(60).default([]),
+  title: z.string().max(200).default('Slides'),
+  metadata: z.object({
+    subject: z.string().max(200).optional(),
+    grade: z.string().max(200).optional(),
+    schoolName: z.string().max(200).optional(),
+    logo: imageDataUri.nullish(),
+  }).default({}),
+});
 
 const COLORS = {
   title: '0F172A',
@@ -38,18 +43,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Too many requests. Please slow down.' }, { status: 429 });
   }
 
-  let body: ExportPptxBody;
+  let json: unknown;
   try {
-    body = await req.json();
+    json = await req.json();
   } catch {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { slidesMarkdown, slideImages, title, metadata } = body;
-
-  if (!slidesMarkdown || typeof slidesMarkdown !== 'string' || slidesMarkdown.trim().length === 0) {
-    return NextResponse.json({ error: 'Missing or empty slide content' }, { status: 400 });
+  const parsed = exportSchema.safeParse(json);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Missing or invalid slide content' }, { status: 400 });
   }
+  const { slidesMarkdown, slideImages, title, metadata } = parsed.data;
 
   try {
     const pres = new PptxGenJS();

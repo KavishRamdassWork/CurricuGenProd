@@ -20,6 +20,9 @@ const classroomSchema = z.object({
   assessmentColumns: z.array(z.string()).default([]),
 });
 
+// Gemini calls (55 s timeout, one retry) need more than the platform default.
+export const maxDuration = 120;
+
 export async function POST(req: NextRequest) {
   const guard = await requireGenerationAccess();
   if (!guard.ok) return guard.response;
@@ -32,6 +35,8 @@ export async function POST(req: NextRequest) {
   } catch (error: unknown) {
     await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
     console.error('Blueprint generation error:', error);
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
+    if (error instanceof z.ZodError) return NextResponse.json({ error: 'Invalid request data.' }, { status: 400 });
+    console.error('Generation error:', error);
+    return NextResponse.json({ error: 'Generation failed. Please try again.' }, { status: 500 });
   }
 }

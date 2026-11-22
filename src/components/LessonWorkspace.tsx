@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import { WeekUnit, UploadedFile, ChatMessage, EducationalResource, TemplateConfig, Classroom, LessonContent } from '@/lib/types';
 import { computeSettingsHash } from '@/lib/classHash';
+import { ALLOWED_UPLOAD_MIME_TYPES, MAX_UPLOAD_BYTES, UPLOAD_ACCEPT, ALLOWED_LOGO_MIME_TYPES, MAX_LOGO_BYTES, LOGO_ACCEPT } from '@/lib/uploadLimits';
 import { generateLessonPlan, generatePresentation, generateWorksheet, generateAssignment, generateAssessment, generateMemo, generateGame, generateResources, refineContent, generateEducationalImage } from '@/lib/gemini';
 import { ArrowLeft, FileText, MonitorPlay, Check, Printer, Sparkles, Upload, Paperclip, X, MessageSquare, Send, Bot, HelpCircle, Gamepad2, Library, Plus, FileCheck, ClipboardList, BookOpen, Settings, Image as ImageIcon, Download, ChevronDown, MoreVertical, AlertTriangle, LucideIcon } from 'lucide-react';
 
@@ -128,7 +129,16 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file after a rejection
     if (!file) return;
+    if (!(ALLOWED_UPLOAD_MIME_TYPES as readonly string[]).includes(file.type)) {
+      alert('Unsupported file type. Attach a PDF, PNG, JPG, WebP, or a plain-text / Markdown / CSV file.');
+      return;
+    }
+    if (file.size > MAX_UPLOAD_BYTES) {
+      alert(`That file is too large. The limit is ${Math.round(MAX_UPLOAD_BYTES / (1024 * 1024))} MB.`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (event) => setAttachedFile({ name: file.name, mimeType: file.type, data: (event.target?.result as string).split(',')[1] });
     reader.readAsDataURL(file);
@@ -136,7 +146,16 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
+    if (!(ALLOWED_LOGO_MIME_TYPES as readonly string[]).includes(file.type)) {
+      alert('Logo must be a PNG, JPG or WebP image.');
+      return;
+    }
+    if (file.size > MAX_LOGO_BYTES) {
+      alert(`Logo is too large. The limit is ${Math.round(MAX_LOGO_BYTES / 1024)} KB.`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (event) => setTemplateConfig(p => ({ ...p, logo: event.target?.result as string }));
     reader.readAsDataURL(file);
@@ -541,7 +560,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   return (
     <div className="flex flex-col lg:flex-row h-full bg-slate-100 overflow-hidden relative">
       {/* Single shared file input for "Add Context" (desktop sidebar + mobile bar) */}
-      <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
+      <input type="file" ref={fileInputRef} accept={UPLOAD_ACCEPT} className="hidden" onChange={handleFileUpload} />
       {/* LEFT TOOLBAR */}
       <aside className={`no-print hidden lg:flex bg-white border-r border-slate-200 flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
         <div className="h-16 border-b border-slate-100 flex items-center px-4 gap-3">
@@ -1003,7 +1022,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                   <div onClick={() => logoInputRef.current?.click()} className="w-20 h-20 border-2 border-dashed border-slate-300 rounded-xl flex items-center justify-center cursor-pointer hover:border-blue-400">
                     {templateConfig.logo ? <img src={templateConfig.logo} className="w-full h-full object-contain p-1" /> : <Upload className="w-6 h-6 text-slate-300" />}
                   </div>
-                  <input type="file" ref={logoInputRef} className="hidden" onChange={handleLogoUpload} />
+                  <input type="file" ref={logoInputRef} accept={LOGO_ACCEPT} className="hidden" onChange={handleLogoUpload} />
                   <div className="flex-1 space-y-2">
                     <input value={templateConfig.schoolName} onChange={e => setTemplateConfig(p => ({...p, schoolName: e.target.value}))} placeholder="School Name" className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
                   </div>

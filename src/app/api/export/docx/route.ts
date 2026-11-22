@@ -58,12 +58,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
   }
 
-  const { content, title, docType, metadata } = body;
+  if (!body || typeof body !== 'object') {
+    return NextResponse.json({ error: 'Invalid request body' }, { status: 400 });
+  }
+  const { content, title, docType } = body;
+  // Only plain, length-capped strings are accepted for the header fields.
+  const rawMeta = (body.metadata && typeof body.metadata === 'object' ? body.metadata : {}) as Record<string, unknown>;
+  const metadata: ExportBody['metadata'] = {};
+  for (const key of ['subject', 'grade', 'className', 'schoolName'] as const) {
+    const value = rawMeta[key];
+    if (typeof value === 'string') metadata[key] = value.slice(0, 200);
+  }
 
   if (!content || typeof content !== 'string' || content.trim().length === 0) {
     return NextResponse.json({ error: 'Missing or empty content' }, { status: 400 });
   }
-  if (!title || typeof title !== 'string') {
+  if (content.length > 300_000) {
+    return NextResponse.json({ error: 'Content is too large to export' }, { status: 413 });
+  }
+  if (!title || typeof title !== 'string' || title.length > 200) {
     return NextResponse.json({ error: 'Missing title' }, { status: 400 });
   }
   if (docType !== 'teacher' && docType !== 'student') {
@@ -71,7 +84,11 @@ export async function POST(req: NextRequest) {
   }
 
   const processedContent =
-    docType === 'student' ? buildStudentHeader(metadata ?? {}) + content : content;
+    docType === 'student' ? buildStudentHeader(metadata) + content : content;
+
+  // NOTE: remarkDocx is deliberately used WITHOUT its image plugin. That plugin fetch()es every image
+  // URL found in the Markdown, which would let a user make this server request internal addresses
+  // (SSRF). Do not enable it without an allowlisted `load` function.
 
   try {
     const processor = unified()

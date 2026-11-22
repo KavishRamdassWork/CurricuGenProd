@@ -33,6 +33,20 @@ model User {
   classrooms       Classroom[]
 }
 
+/// One row per PayFast notification (ITN) we accepted. Gives an audit trail for reconciling money
+/// against plans, and `pfPaymentId` makes redelivered notifications detectable.
+model Payment {
+  id          String   @id @default(cuid())
+  pfPaymentId String   @unique
+  mPaymentId  String?
+  clerkId     String
+  status      String
+  amountGross String?
+  createdAt   DateTime @default(now())
+
+  @@index([clerkId, createdAt])
+}
+
 model Classroom {
   id                String   @id @default(cuid())
   userId            String
@@ -61,4 +75,12 @@ model Classroom {
 
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+
+  // Optimistic-locking counter: bumped on every write. A client that sends the version it last saw
+  // is rejected (409) if someone else saved in between, instead of silently overwriting their data.
+  version           Int      @default(0)
+
+  // Every classroom query is "this user's classrooms, newest first". Postgres does not index
+  // foreign keys automatically, so without this the list query scans the whole table.
+  @@index([userId, updatedAt])
 }
