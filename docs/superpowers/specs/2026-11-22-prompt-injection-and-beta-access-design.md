@@ -12,7 +12,7 @@ user's data, so a prompt injection cannot steal data. The real harms are:
 2. **Abuse of the AI quota** (money): free accounts used as a general chatbot, runaway output, unlimited plans with no ceiling.
 3. **Prompts that quietly change behaviour** (system-prompt leakage, instructions hidden in uploaded documents or in saved text that is pasted into later prompts).
 
-Separately, the owner's account (kavishramdasswork@gmail.com) and other beta testers must be exempt from the
+Separately, the owner's account at the owner's address (set in BETA_TESTER_EMAILS) and other beta testers must be exempt from the
 10-generations-per-day free limit for the duration of the beta, and the exemption must be easy to switch off.
 
 ## Goals

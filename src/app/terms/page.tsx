@@ -101,7 +101,7 @@ export default function TermsPage() {
           limits to protect the Service and may restrict accounts whose use is clearly abusive or automated.
         </Clause>
         <Clause id="4.3">
-          <strong>Beta access.</strong> Some accounts are given Pro-equivalent access during a beta period free of charge.
+          <strong>Beta access.</strong> Some accounts are given extended access during a beta period free of charge, subject to a daily fair-use limit.
           We may end beta access with reasonable notice.
         </Clause>
         <Clause id="4.4">

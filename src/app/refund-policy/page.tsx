@@ -136,8 +136,8 @@ export default function RefundPolicyPage() {
         </Clause>
         <Clause id="5.3">
           <strong>Renewals.</strong> If you were charged a monthly renewal and did not mean to continue, tell us within 7
-          days of that charge. We will refund the renewal in full provided you have not used Pro-only features (unlimited
-          generations beyond the free daily limit, or extra images) since the renewal date. We will also cancel the
+          days of that charge. We will refund the renewal in full provided you have not used Pro-only features
+          (generations beyond the free daily limit, or extra images) since the renewal date. We will also cancel the
           subscription so it does not renew again.
         </Clause>
         <Clause id="5.4">
