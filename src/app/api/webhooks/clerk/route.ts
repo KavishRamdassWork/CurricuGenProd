@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Webhook } from 'svix';
 import { WebhookEvent } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
-import { resolvePlanForEmail, placeholderEmail } from '@/lib/ensureUser';
+import { placeholderEmail } from '@/lib/ensureUser';
 
 export async function POST(req: NextRequest) {
   const WEBHOOK_SECRET = process.env.CLERK_WEBHOOK_SECRET;
@@ -58,7 +58,8 @@ export async function POST(req: NextRequest) {
           email: email || placeholderEmail(id),
           name: name || null,
           imageUrl: image_url || null,
-          plan: resolvePlanForEmail(email),
+          // Beta access is resolved per request from BETA_TESTER_EMAILS, never stored.
+          plan: 'FREE',
           generationsLeft: 10,
           lastGenerationDate: new Date(),
         },

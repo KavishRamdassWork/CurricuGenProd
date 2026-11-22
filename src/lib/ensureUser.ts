@@ -11,20 +11,9 @@
  * `user.updated`/`user.created` supplies the real address.
  */
 import { prisma } from '@/lib/prisma';
-import { Plan } from '@prisma/client';
 
 export function placeholderEmail(clerkId: string): string {
   return `${clerkId}@pending.invalid`;
-}
-
-export function resolvePlanForEmail(email: string | null | undefined): Plan {
-  if (!email) return 'FREE';
-  const betaEmails = (process.env.BETA_TESTER_EMAILS || '')
-    .toLowerCase()
-    .split(',')
-    .map((e) => e.trim())
-    .filter(Boolean);
-  return betaEmails.includes(email.toLowerCase()) ? 'BETA' : 'FREE';
 }
 
 export interface ClerkProfile {
@@ -45,7 +34,8 @@ export async function ensureDbUser<S extends Record<string, boolean>>(profile: C
       email,
       name: profile.name || null,
       imageUrl: profile.imageUrl || null,
-      plan: resolvePlanForEmail(profile.email),
+      // Beta access is resolved per request from BETA_TESTER_EMAILS (see plans.ts), never stored.
+      plan: 'FREE',
       generationsLeft: 10,
       imagesLeft: 1,
       lastGenerationDate: new Date(),
