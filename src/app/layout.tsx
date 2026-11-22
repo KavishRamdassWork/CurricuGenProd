@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
+import IdleLogout from "@/components/IdleLogout";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,6 +22,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <html lang="en" className="h-full">
         <body className={`${inter.className} h-full antialiased`} suppressHydrationWarning>
           {children}
+          <IdleLogout />
         </body>
       </html>
     </ClerkProvider>

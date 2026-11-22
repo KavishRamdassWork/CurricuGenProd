@@ -107,8 +107,8 @@ export default function RefundPolicyPage() {
               &ldquo;Cancel subscription&rdquo;. We will cancel it with PayFast and confirm by email within 1 business day.
             </>,
             <>
-              Cancel directly from your PayFast subscription, using the link in any PayFast receipt email we send you,
-              where PayFast makes that option available.
+              Cancel directly with PayFast, which handles the payment, where PayFast offers buyers that option for your
+              subscription. If you do, please also email us so we can confirm your account is updated.
             </>,
           ]}
         />

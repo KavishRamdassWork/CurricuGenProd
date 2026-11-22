@@ -1,6 +1,12 @@
 import { SignIn } from '@clerk/nextjs';
 
-export default function SignInPage() {
+export default async function SignInPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
+  const signedOutForInactivity = (await searchParams).reason === 'idle';
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-blue-950 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -13,6 +19,14 @@ export default function SignInPage() {
           <h1 className="text-3xl font-extrabold text-white tracking-tight">CurricuGen Pro</h1>
           <p className="text-slate-400 mt-2">AI-powered lesson planning for teachers</p>
         </div>
+        {signedOutForInactivity && (
+          <p
+            role="status"
+            className="mb-6 rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-center text-sm text-amber-200"
+          >
+            You were signed out after 60 minutes of inactivity to keep your account safe. Please sign in again.
+          </p>
+        )}
         <SignIn
           appearance={{
             elements: {

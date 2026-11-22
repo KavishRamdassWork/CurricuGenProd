@@ -216,8 +216,8 @@ export default function PrivacyPage() {
       <Section n={10} title="How we protect it">
         <Clause id="10.1">
           We use reasonable technical and organisational measures, including encrypted connections (HTTPS), restricted access
-          to production data, verified payment notifications, and a separate sign-in provider so we never handle your
-          password. No online service is completely secure, so please also protect your own login.
+          to production data, verified payment notifications, automatic sign-out after 60 minutes of inactivity, and a
+          separate sign-in provider so we never handle your password. No online service is completely secure, so please also protect your own login.
         </Clause>
         <Clause id="10.2">
           If we have reasonable grounds to believe your personal information has been accessed or acquired by an
