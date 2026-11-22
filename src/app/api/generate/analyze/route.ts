@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeClassPerformanceServer } from '@/lib/aiService';
-import { requireGenerationAccess, consumeGeneration } from '@/lib/authGuard';
+import { requireGenerationAccess, refundGeneration } from '@/lib/authGuard';
 import { Student } from '@/lib/types';
 import { z } from 'zod';
 
@@ -18,9 +18,9 @@ export async function POST(req: NextRequest) {
   try {
     const { students } = schema.parse(await req.json());
     const analysis = await analyzeClassPerformanceServer(students as Student[]);
-    await consumeGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ analysis });
   } catch (error: unknown) {
+    await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Analysis failed' }, { status: 500 });
   }
 }

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { refineContentServer } from '@/lib/aiService';
-import { requireGenerationAccess, consumeGeneration } from '@/lib/authGuard';
+import { requireGenerationAccess, refundGeneration } from '@/lib/authGuard';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -16,9 +16,9 @@ export async function POST(req: NextRequest) {
   try {
     const { currentContent, instruction, contextType, file } = schema.parse(await req.json());
     const content = await refineContentServer(currentContent, instruction, contextType, file);
-    await consumeGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ content });
   } catch (error: unknown) {
+    await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
   }
 }

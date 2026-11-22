@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generatePresentationServer } from '@/lib/aiService';
-import { requireGenerationAccess, consumeGeneration } from '@/lib/authGuard';
+import { requireGenerationAccess, refundGeneration } from '@/lib/authGuard';
 import { Classroom, WeekUnit } from '@/lib/types';
 import { z } from 'zod';
 
@@ -12,9 +12,9 @@ export async function POST(req: NextRequest) {
   try {
     const { classroom, units } = schema.parse(await req.json());
     const content = await generatePresentationServer(classroom, units);
-    await consumeGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ content });
   } catch (error: unknown) {
+    await refundGeneration(guard.dbUser.id, guard.dbUser.plan);
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Generation failed' }, { status: 500 });
   }
 }

@@ -7,6 +7,7 @@ import { auth } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
 import { NextResponse } from 'next/server';
 import buildRateLimit from '@/lib/rateLimit';
+import { reserveGenerationCredit, refundGenerationCredit } from '@/lib/generationCredits';
 
 const limiter = buildRateLimit({
   uniqueTokenPerInterval: 500,
@@ -39,34 +40,23 @@ export async function requireGenerationAccess(): Promise<GuardResult> {
 
   let dbUser = await prisma.user.findUnique({
     where: { clerkId: userId },
-    select: { id: true, plan: true, generationsLeft: true, lastGenerationDate: true, email: true, name: true },
+    select: { id: true, plan: true, generationsLeft: true, email: true, name: true },
   });
 
   // Auto-create user if not yet in DB (webhook race condition)
   if (!dbUser) {
     dbUser = await prisma.user.create({
       data: { clerkId: userId, email: '', plan: 'FREE', generationsLeft: 10, lastGenerationDate: new Date() },
-      select: { id: true, plan: true, generationsLeft: true, lastGenerationDate: true, email: true, name: true },
+      select: { id: true, plan: true, generationsLeft: true, email: true, name: true },
     });
   }
 
   if (dbUser.plan === 'FREE') {
-    const today = new Date().toDateString();
-    const lastGen = dbUser.lastGenerationDate?.toDateString();
+    // Reserve the credit now, atomically (see generationCredits.ts). Routes must call
+    // refundGeneration() if the generation then fails, so a failed request costs nothing.
+    const remaining = await reserveGenerationCredit(dbUser.id);
 
-    if (lastGen !== today) {
-      // Reset because it's a new day
-      dbUser = await prisma.user.update({
-        where: { id: dbUser.id },
-        data: {
-          generationsLeft: 10,
-          lastGenerationDate: new Date(),
-        },
-        select: { id: true, plan: true, generationsLeft: true, lastGenerationDate: true, email: true, name: true },
-      });
-    }
-
-    if (dbUser.generationsLeft <= 0) {
+    if (remaining === null) {
       return {
         ok: false,
         response: NextResponse.json(
@@ -75,21 +65,20 @@ export async function requireGenerationAccess(): Promise<GuardResult> {
         ),
       };
     }
+
+    dbUser = { ...dbUser, generationsLeft: remaining };
   }
 
   return { ok: true, dbUser };
 }
 
-/** Decrement generation credit (only for FREE plan) */
-export async function consumeGeneration(userId: string, plan: string) {
+/**
+ * Return the credit reserved by requireGenerationAccess() when the generation failed.
+ * No-op for paid plans, which never reserve one.
+ */
+export async function refundGeneration(userId: string, plan: string) {
   if (plan === 'FREE') {
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        generationsLeft: { decrement: 1 },
-        lastGenerationDate: new Date()
-      },
-    });
+    await refundGenerationCredit(userId);
   }
 }
 
