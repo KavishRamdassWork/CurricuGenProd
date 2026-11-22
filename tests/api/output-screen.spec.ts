@@ -177,6 +177,71 @@ test.describe('screenOutput: required structure', () => {
   });
 });
 
+test.describe('screenOutput: heading normalisation', () => {
+  const lessonWith = (objectiveLine: string) =>
+    [objectiveLine, ...LESSON_HEADINGS.slice(1).map((h) => `## ${h}`)].join('\nBody.\n') + '\nBody.';
+
+  const tolerated: Array<[string, string]> = [
+    ['bold', '## **Objective & Success Criteria**'],
+    ['numbered with and', '## 1. Objective and Success Criteria'],
+    ['numbered with paren', '## 1) Objective & Success Criteria'],
+    ['trailing colon', '## Objective & Success Criteria:'],
+    ['emoji prefix', `## ${String.fromCodePoint(127919)} Objective & Success Criteria`],
+    ['underscore emphasis and backticks', '## _`Objective & Success Criteria`_'],
+    ['extra spaces and lower case', '##   objective   &   success criteria  '],
+  ];
+
+  for (const [name, heading] of tolerated) {
+    test(`lesson-plan accepts a ${name} heading`, () => {
+      const text = lessonWith(heading);
+      expect(screenOutput('lesson-plan', text)).toBe(text);
+    });
+  }
+
+  test('a missing heading still fails', () => {
+    const text = lessonWith('## Something Else');
+    expect(catchError(() => screenOutput('lesson-plan', text))).toBeInstanceOf(MalformedOutputError);
+  });
+
+  test('a ### heading does not satisfy a required ## heading', () => {
+    const text = lessonWith('### Objective & Success Criteria');
+    expect(catchError(() => screenOutput('lesson-plan', text))).toBeInstanceOf(MalformedOutputError);
+  });
+
+  test('a # heading does not satisfy a required ## heading', () => {
+    const text = lessonWith('# Objective & Success Criteria');
+    expect(catchError(() => screenOutput('lesson-plan', text))).toBeInstanceOf(MalformedOutputError);
+  });
+
+  test('"and" in an expected heading also matches "&"', () => {
+    const text = withHeadings(GAME_HEADINGS).replace('## Materials Required', '## **Materials Required:**');
+    expect(screenOutput('game', text)).toBe(text);
+    const resources = withHeadings(RESOURCES_HEADINGS).replace('Online Resources & Videos', 'Online Resources and Videos');
+    expect(screenOutput('resources', resources)).toBe(resources);
+  });
+});
+
+test.describe('screenOutput: truncated output (MAX_TOKENS)', () => {
+  for (const kind of ALL_KINDS) {
+    test(`${kind}: finishReason MAX_TOKENS throws MalformedOutputError without model text`, () => {
+      const body = JSON_KINDS.includes(kind) ? '{"title":"Secret model text' : validFor(kind, 'Secret model text');
+      const err = catchError(() => screenOutput(kind, body, { finishReason: 'MAX_TOKENS' }));
+      expect(err).toBeInstanceOf(MalformedOutputError);
+      expect((err as Error).message).not.toContain('Secret model text');
+    });
+  }
+
+  test('a truncated output that leaks the canary is still a LEAK block', () => {
+    const err = catchError(() => screenOutput('worksheet', `x ${CANARY}`, { finishReason: 'MAX_TOKENS' }));
+    expect(err).toBeInstanceOf(ContentBlockedError);
+    expect((err as ContentBlockedError).reason).toBe('LEAK');
+  });
+
+  test('finishReason STOP is not truncation', () => {
+    expect(screenOutput('worksheet', 'fine', { finishReason: 'STOP' })).toBe('fine');
+  });
+});
+
 test.describe('screenOutput: markdown hygiene', () => {
   const dirty =
     'See [site](https://evil.example/x) and ![p](https://evil.example/i.png) <script>alert(1)</script> <iframe src=x></iframe>';

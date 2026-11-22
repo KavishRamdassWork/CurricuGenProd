@@ -41,7 +41,7 @@ export async function reserveGenerationCredit(
       id: userId,
       OR: [{ lastGenerationDate: null }, { lastGenerationDate: { lt: startOfDay(now) } }],
     },
-    data: { generationsUsedToday: 0, lastGenerationDate: now },
+    data: { generationsUsedToday: 0, generationRefundsToday: 0, lastGenerationDate: now },
   });
 
   try {
@@ -58,19 +58,45 @@ export async function reserveGenerationCredit(
 }
 
 /**
+ * Capped refunds per user per day. A malformed or truncated output is a full-cost model call, and a
+ * user can provoke one on purpose; refunding every such failure would bound a FREE account only by the
+ * per-minute rate limiter, not by its daily ceiling. After this many capped refunds in a day the
+ * credit for such a failure stays spent.
+ */
+export const MAX_CAPPED_REFUNDS_PER_DAY = 5;
+
+/**
  * Give back a reserved credit after a failed generation. Only decrements while the counter is above
  * zero, so a refund that lands after the midnight reset can never push it negative. Never throws: a
  * failed refund must not turn into a second error on top of the generation failure the caller is
  * already handling.
+ *
+ * `capped: true` (malformed/truncated output) is one conditional UPDATE that only matches while
+ * today's capped refunds are below MAX_CAPPED_REFUNDS_PER_DAY; it decrements the used counter and
+ * counts the refund together, so parallel refunds can never exceed the cap. Uncapped refunds
+ * (infrastructure failures, invalid request data) do not touch the refund counter.
  */
-export async function refundGenerationCredit(userId: string): Promise<void> {
+export async function refundGenerationCredit(userId: string, opts: { capped?: boolean } = {}): Promise<void> {
   try {
+    if (opts.capped) {
+      await prisma.user.updateMany({
+        where: {
+          id: userId,
+          generationsUsedToday: { gt: 0 },
+          generationRefundsToday: { lt: MAX_CAPPED_REFUNDS_PER_DAY },
+        },
+        data: { generationsUsedToday: { decrement: 1 }, generationRefundsToday: { increment: 1 } },
+      });
+      return;
+    }
     await prisma.user.updateMany({
       where: { id: userId, generationsUsedToday: { gt: 0 } },
       data: { generationsUsedToday: { decrement: 1 } },
     });
   } catch (error) {
-    console.error('Failed to refund generation credit:', error);
+    // Error name only: Prisma messages can carry query details.
+    const name = error instanceof Error ? error.name : typeof error;
+    console.error(JSON.stringify({ event: 'refund_failed', userId, error: name }));
   }
 }
 

@@ -2,8 +2,9 @@
  * Central mapping from a failed generation to the HTTP response the client sees.
  *
  * Safety blocks and canary hits keep the reserved credit (the request was the problem, so retrying
- * it must still cost something); infrastructure failures, malformed model output and invalid request
- * data give it back. Raw error messages never reach the client.
+ * it must still cost something). Malformed or truncated model output gives it back, but only up to
+ * MAX_CAPPED_REFUNDS_PER_DAY times a day (a user can provoke such output on purpose). Infrastructure
+ * failures and invalid request data always give it back. Raw error messages never reach the client.
  */
 import { NextResponse } from 'next/server';
 import { ZodError } from 'zod';
@@ -19,13 +20,15 @@ export type ClassifiedGenerationError = {
   status: number;
   body: { error: string; code?: string };
   refund: boolean;
+  /** The refund counts against the daily capped-refund allowance (malformed/truncated output). */
+  refundCapped: boolean;
   blockedReason?: string;
 };
 
 /** Pure: decide status, client-safe body and whether to refund. */
 export function classifyGenerationError(error: unknown): ClassifiedGenerationError {
   if (error instanceof ZodError) {
-    return { status: 400, body: { error: 'Invalid request data.' }, refund: true };
+    return { status: 400, body: { error: 'Invalid request data.' }, refund: true, refundCapped: false };
   }
   if (error instanceof ContentBlockedError) {
     return {
@@ -35,6 +38,7 @@ export function classifyGenerationError(error: unknown): ClassifiedGenerationErr
         code: 'CONTENT_BLOCKED',
       },
       refund: false,
+      refundCapped: false,
       blockedReason: error.reason,
     };
   }
@@ -43,9 +47,10 @@ export function classifyGenerationError(error: unknown): ClassifiedGenerationErr
       status: 500,
       body: { error: 'Generation produced an unusable result. Please try again.' },
       refund: true,
+      refundCapped: true,
     };
   }
-  return { status: 500, body: { error: 'Generation failed. Please try again.' }, refund: true };
+  return { status: 500, body: { error: 'Generation failed. Please try again.' }, refund: true, refundCapped: false };
 }
 
 /**
@@ -59,7 +64,7 @@ export async function handleGenerationError(
 ): Promise<NextResponse> {
   const result = classifyGenerationError(error);
 
-  if (result.refund) await refundGenerationCredit(user.id);
+  if (result.refund) await refundGenerationCredit(user.id, { capped: result.refundCapped });
 
   if (result.blockedReason) {
     console.warn(JSON.stringify({ event: 'content_blocked', route, userId: user.id, reason: result.blockedReason }));

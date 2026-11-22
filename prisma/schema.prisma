@@ -30,6 +30,11 @@ model User {
   /// Generations taken on the day of `lastGenerationDate`, compared against the effective plan's
   /// daily ceiling (src/lib/plans.ts). A new day resets it to 0 on the next reservation.
   generationsUsedToday Int     @default(0)
+  /// Capped refunds (malformed or truncated model output) given back on the day of
+  /// `lastGenerationDate`. At most MAX_CAPPED_REFUNDS_PER_DAY (src/lib/generationCredits.ts) per day,
+  /// so deliberately broken requests cannot make the daily ceiling meaningless. Reset with
+  /// `generationsUsedToday`.
+  generationRefundsToday Int   @default(0)
   lastGenerationDate DateTime?
   imagesLeft       Int         @default(1)
   lastImageDate    DateTime?

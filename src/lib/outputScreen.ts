@@ -67,10 +67,35 @@ const REQUIRED_HEADINGS: Partial<Record<GenKind, string[]>> = {
 
 const MIN_SLIDES = 3;
 
-const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+/**
+ * Reduce a heading's text to a comparable form, tolerating normal model formatting: markdown emphasis
+ * (`*`, `_`) and backticks, leading numbering (`1.`, `1)`), leading emoji or other symbols, trailing
+ * colons, repeated whitespace, `&` versus `and`, and letter case.
+ */
+function normaliseHeading(text: string): string {
+  return text
+    .replace(/[*_`]/g, '')
+    .replace(/^[^\p{L}\p{N}]+/u, '') // leading emoji, symbols, punctuation
+    .replace(/^\d+\s*[.)]\s*/, '') // leading "1." or "1)"
+    .replace(/^[^\p{L}\p{N}]+/u, '') // anything left between the number and the words
+    .replace(/[\s:]+$/, '')
+    .replace(/\s*&\s*/g, ' and ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
 
-function hasHeading(text: string, heading: string): boolean {
-  return new RegExp(`^##\\s+${escapeRegExp(heading)}`, 'im').test(text);
+/** Normalised text of every level-2 (`## `) heading line. `###` and `#` lines are not included. */
+function levelTwoHeadings(text: string): string[] {
+  const out: string[] = [];
+  for (const m of text.matchAll(/^##(?!#)[ \t]+(.*)$/gm)) out.push(normaliseHeading(m[1]));
+  return out;
+}
+
+function hasHeading(headings: string[], heading: string): boolean {
+  const wanted = normaliseHeading(heading);
+  // Text may follow the heading (e.g. "Lesson Flow (45 min)"), as before, but only after a word boundary.
+  return headings.some((h) => h.startsWith(wanted) && !/[\p{L}\p{N}]/u.test(h.charAt(wanted.length)));
 }
 
 function checkStructure(kind: GenKind, text: string): void {
@@ -81,8 +106,9 @@ function checkStructure(kind: GenKind, text: string): void {
   }
   const required = REQUIRED_HEADINGS[kind];
   if (!required) return;
+  const headings = levelTwoHeadings(text);
   for (const heading of required) {
-    if (!hasHeading(text, heading)) throw new MalformedOutputError(`Missing section: ${heading}`);
+    if (!hasHeading(headings, heading)) throw new MalformedOutputError(`Missing section: ${heading}`);
   }
 }
 
@@ -209,8 +235,13 @@ function sanitiseMarkdown(kind: GenKind, text: string): string {
 
 /**
  * Screen raw model output before it is stored or returned.
- * Order: provider block signals, empty output, canary leak, required structure, markdown hygiene.
- * JSON kinds are returned unchanged once they pass the block, empty and canary checks.
+ * Order: provider block signals, empty output, canary leak, truncation, required structure, markdown
+ * hygiene. JSON kinds are returned unchanged once they pass the block, empty, canary and truncation
+ * checks.
+ *
+ * Truncation (`finishReason` MAX_TOKENS) is malformed output for every kind: a cut-off worksheet or
+ * refine has no structure check that would notice, and cut-off JSON is not valid. It is checked after
+ * the canary so that a truncated leak is still reported (and kept, unrefunded) as a LEAK.
  */
 export function screenOutput(kind: GenKind, text: string | undefined, meta: ModelMeta = {}): string {
   if (meta.finishReason && BLOCKING_FINISH_REASONS.has(meta.finishReason)) {
@@ -223,6 +254,9 @@ export function screenOutput(kind: GenKind, text: string | undefined, meta: Mode
   if (typeof text !== 'string' || text.trim() === '') throw new MalformedOutputError();
 
   if (text.includes(CANARY)) throw new ContentBlockedError('LEAK');
+
+  // Fixed message: never include model text.
+  if (meta.finishReason === 'MAX_TOKENS') throw new MalformedOutputError('Model output was truncated');
 
   if (JSON_KINDS.has(kind)) return text;
 

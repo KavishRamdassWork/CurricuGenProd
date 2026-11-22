@@ -4,6 +4,7 @@ import {
   reserveGenerationCredit,
   refundGenerationCredit,
   reserveImageCredit,
+  MAX_CAPPED_REFUNDS_PER_DAY,
   refundImageCredit,
   FREE_DAILY_GENERATIONS,
 } from '../../src/lib/generationCredits';
@@ -25,10 +26,22 @@ test.describe('Per-plan generation credits', () => {
   const prisma = new PrismaClient();
   const createdIds: string[] = [];
 
-  async function makeUser(data: { generationsUsedToday: number; lastGenerationDate: Date | null; plan?: 'FREE' | 'PRO' }) {
+  async function makeUser(data: {
+    generationsUsedToday: number;
+    lastGenerationDate: Date | null;
+    plan?: 'FREE' | 'PRO';
+    generationRefundsToday?: number;
+  }) {
     const id = `credits_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const user = await prisma.user.create({
-      data: { clerkId: id, email: `${id}@credits.test`, plan: data.plan ?? 'FREE', generationsUsedToday: data.generationsUsedToday, lastGenerationDate: data.lastGenerationDate },
+      data: {
+        clerkId: id,
+        email: `${id}@credits.test`,
+        plan: data.plan ?? 'FREE',
+        generationsUsedToday: data.generationsUsedToday,
+        lastGenerationDate: data.lastGenerationDate,
+        generationRefundsToday: data.generationRefundsToday ?? 0,
+      },
     });
     createdIds.push(user.id);
     return user;
@@ -132,6 +145,77 @@ test.describe('Per-plan generation credits', () => {
 
   test('refunding an unknown user does not throw', async () => {
     await expect(refundGenerationCredit('no_such_user')).resolves.toBeUndefined();
+    await expect(refundGenerationCredit('no_such_user', { capped: true })).resolves.toBeUndefined();
+  });
+
+  // ─── Capped refunds (malformed / truncated output) ────────────────────────
+  const refunds = async (id: string) =>
+    (await prisma.user.findUniqueOrThrow({ where: { id } })).generationRefundsToday;
+
+  test('capped refunds stop after MAX_CAPPED_REFUNDS_PER_DAY: the next failure keeps its credit', async () => {
+    expect(MAX_CAPPED_REFUNDS_PER_DAY).toBe(5);
+    const user = await makeUser({ generationsUsedToday: 0, lastGenerationDate: new Date() });
+
+    for (let i = 0; i < MAX_CAPPED_REFUNDS_PER_DAY; i++) {
+      expect(await reserveGenerationCredit(user.id, 'FREE')).not.toBeNull();
+      await refundGenerationCredit(user.id, { capped: true });
+      expect(await used(user.id)).toBe(0);
+    }
+    expect(await refunds(user.id)).toBe(MAX_CAPPED_REFUNDS_PER_DAY);
+
+    // Sixth failure of this kind today: the credit stays spent.
+    expect(await reserveGenerationCredit(user.id, 'FREE')).not.toBeNull();
+    await refundGenerationCredit(user.id, { capped: true });
+    expect(await used(user.id)).toBe(1);
+    expect(await refunds(user.id)).toBe(MAX_CAPPED_REFUNDS_PER_DAY);
+  });
+
+  test('parallel capped refunds are granted at most MAX_CAPPED_REFUNDS_PER_DAY times', async () => {
+    const user = await makeUser({ generationsUsedToday: 10, lastGenerationDate: new Date() });
+
+    await Promise.all(Array.from({ length: 12 }, () => refundGenerationCredit(user.id, { capped: true })));
+
+    expect(await used(user.id)).toBe(10 - MAX_CAPPED_REFUNDS_PER_DAY);
+    expect(await refunds(user.id)).toBe(MAX_CAPPED_REFUNDS_PER_DAY);
+  });
+
+  test('a capped refund never goes below zero and is not counted when nothing was given back', async () => {
+    const user = await makeUser({ generationsUsedToday: 0, lastGenerationDate: new Date() });
+    await refundGenerationCredit(user.id, { capped: true });
+    expect(await used(user.id)).toBe(0);
+    expect(await refunds(user.id)).toBe(0);
+  });
+
+  test('uncapped refunds are unaffected by an exhausted capped-refund allowance', async () => {
+    const user = await makeUser({
+      generationsUsedToday: 4,
+      lastGenerationDate: new Date(),
+      generationRefundsToday: MAX_CAPPED_REFUNDS_PER_DAY,
+    });
+
+    await refundGenerationCredit(user.id, { capped: true });
+    expect(await used(user.id)).toBe(4);
+
+    await refundGenerationCredit(user.id);
+    await refundGenerationCredit(user.id, { capped: false });
+    expect(await used(user.id)).toBe(2);
+    expect(await refunds(user.id)).toBe(MAX_CAPPED_REFUNDS_PER_DAY);
+  });
+
+  test('the new-day reset also clears the capped-refund counter', async () => {
+    const yesterday = new Date(Date.now() - 36 * 60 * 60 * 1000);
+    const user = await makeUser({
+      generationsUsedToday: 7,
+      lastGenerationDate: yesterday,
+      generationRefundsToday: MAX_CAPPED_REFUNDS_PER_DAY,
+    });
+
+    expect(await reserveGenerationCredit(user.id, 'FREE')).toBe(FREE_DAILY_GENERATIONS - 1);
+    expect(await refunds(user.id)).toBe(0);
+
+    await refundGenerationCredit(user.id, { capped: true });
+    expect(await used(user.id)).toBe(0);
+    expect(await refunds(user.id)).toBe(1);
   });
 
   // ─── Image credits ────────────────────────────────────────────────────────
