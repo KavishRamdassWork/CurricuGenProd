@@ -175,23 +175,23 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
   };
 
   return (
-    <div className="flex-1 h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-blue-50/40 p-6 md:p-10 relative">
+    <div className="flex-1 h-full overflow-y-auto bg-gradient-to-br from-slate-50 via-white to-blue-50/40 p-4 sm:p-6 lg:p-10 relative">
       <div className="max-w-7xl mx-auto">
         
         {/* Header */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-6 relative z-10">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 lg:mb-12 gap-5 lg:gap-6 relative z-10">
           <div>
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-100/50 text-blue-700 text-sm font-semibold mb-4 border border-blue-200">
                <Sparkles className="w-4 h-4" /> AI-Powered Curriculum
             </div>
-            <h1 className="text-4xl md:text-5xl font-extrabold text-slate-900 tracking-tight mb-4">Classpaces</h1>
-            <p className="text-slate-500 text-lg max-w-2xl font-light">
+            <h1 className="text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight mb-3 lg:mb-4">Classpaces</h1>
+            <p className="text-slate-500 text-base lg:text-lg max-w-2xl font-light">
               Design, organize, and deeply analyze your classrooms. Create tailored curriculums driven by specific student needs and AI intelligence.
             </p>
           </div>
           <button 
             onClick={() => setIsModalOpen(true)}
-            className="group flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white px-7 py-4 rounded-full font-bold shadow-xl shadow-slate-900/10 transition-all transform hover:-translate-y-1 active:scale-95"
+            className="group flex items-center justify-center gap-2 w-full md:w-auto flex-none bg-slate-900 hover:bg-slate-800 text-white px-7 py-4 rounded-full font-bold shadow-xl shadow-slate-900/10 transition-all transform hover:-translate-y-1 active:scale-95"
           >
             <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
             <span className="tracking-wide">Create Class</span>
@@ -217,7 +217,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 lg:gap-8">
             {classes.map(cls => (
               <div 
                 key={cls.id} 
@@ -225,30 +225,30 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
               >
                 <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-bl-full -z-10 group-hover:scale-150 transition-transform duration-700" />
                 
-                <div className="p-8 flex-1 cursor-pointer z-10" onClick={() => onOpenClass(cls)}>
-                  <div className="flex justify-between items-start mb-6">
+                <div className="p-5 sm:p-8 flex-1 cursor-pointer z-10" onClick={() => onOpenClass(cls)}>
+                  <div className="flex justify-between items-start gap-2 mb-5 sm:mb-6">
                     <span className="inline-flex items-center px-4 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 uppercase tracking-widest">
                        {cls.grade}
                     </span>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1 flex-shrink-0">
                        <button
                           title="Edit Class"
                           onClick={(e) => { e.stopPropagation(); onOpenEditClass?.(cls); }}
-                          className="min-w-12 min-h-12 md:min-w-0 md:min-h-0 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 transition-all duration-300"
+                          className="w-11 h-11 flex-shrink-0 lg:w-9 lg:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-indigo-600 transition-all duration-300"
                        >
                           <Pencil className="w-4 h-4" />
                        </button>
                        <button
                           title="Class Analytics"
                           onClick={(e) => { e.stopPropagation(); setActiveAnalysisClassId(cls.id); }}
-                          className="min-w-12 min-h-12 md:min-w-0 md:min-h-0 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 transition-all duration-300"
+                          className="w-11 h-11 flex-shrink-0 lg:w-9 lg:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-blue-600 transition-all duration-300"
                        >
                           <BarChart2 className="w-4 h-4" />
                        </button>
                        <button
                           title="Delete Class"
                           onClick={(e) => { e.stopPropagation(); setDeleteTargetId(cls.id); }}
-                          className="min-w-12 min-h-12 md:min-w-0 md:min-h-0 md:w-9 md:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-600 transition-all duration-300"
+                          className="w-11 h-11 flex-shrink-0 lg:w-9 lg:h-9 rounded-full bg-slate-50 flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-600 transition-all duration-300"
                        >
                           <Trash2 className="w-4 h-4" />
                        </button>
@@ -258,7 +258,7 @@ const ClassManager: React.FC<ClassManagerProps> = ({ classes, setClasses, onOpen
                   <h3 className="text-2xl font-extrabold text-slate-900 mb-2 group-hover:text-blue-600 transition-colors tracking-tight">{cls.name}</h3>
                   <p className="text-sm font-medium text-slate-500 mb-8">{cls.subject} • {cls.curriculum}</p>
                   
-                  <div className="grid grid-cols-2 gap-6 bg-slate-50/50 p-5 rounded-2xl border border-slate-100">
+                  <div className="grid grid-cols-2 gap-4 sm:gap-6 bg-slate-50/50 p-4 sm:p-5 rounded-2xl border border-slate-100">
                     <div>
                        <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-2">Students</div>
                        <div className="flex items-center gap-2">

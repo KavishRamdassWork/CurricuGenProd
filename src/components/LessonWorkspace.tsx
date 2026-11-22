@@ -450,7 +450,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
                 onClick={() => setIsDownloadOpen(prev => !prev)}
                 disabled={isDownloadLoading}
                 aria-label="Download"
-                className="flex items-center gap-1.5 px-2.5 md:px-3 py-2.5 md:py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 lg:px-3 py-2.5 lg:py-2 text-sm font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
               >
                 {isDownloadLoading
                   ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
@@ -528,11 +528,11 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
   );
 
   return (
-    <div className="flex flex-col md:flex-row h-full bg-slate-100 overflow-hidden relative">
+    <div className="flex flex-col lg:flex-row h-full bg-slate-100 overflow-hidden relative">
       {/* Single shared file input for "Add Context" (desktop sidebar + mobile bar) */}
       <input type="file" ref={fileInputRef} className="hidden" onChange={handleFileUpload} />
       {/* LEFT TOOLBAR */}
-      <aside className={`no-print hidden md:flex bg-white border-r border-slate-200 flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
+      <aside className={`no-print hidden lg:flex bg-white border-r border-slate-200 flex-col z-20 transition-all duration-300 ${isSidebarCollapsed ? 'w-16' : 'w-72'}`}>
         <div className="h-16 border-b border-slate-100 flex items-center px-4 gap-3">
           <button onClick={onBack} className="p-2 rounded-lg hover:bg-slate-100 text-slate-500"><ArrowLeft className="w-5 h-5" /></button>
           {!isSidebarCollapsed && <span className="font-bold text-slate-800 truncate">Workspace</span>}
@@ -588,7 +588,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
         </div>
       </aside>
 
-      <div className={`no-print md:hidden absolute left-0 right-0 z-30 flex items-center bg-white border-b border-slate-200 transition-[top] duration-200 ${isBarHidden && !isMobileSectionMenuOpen && !isMobileMoreOpen && !isDownloadOpen ? '-top-14' : 'top-0'}`}>
+      <div className={`no-print lg:hidden absolute left-0 right-0 z-30 flex items-center bg-white border-b border-slate-200 transition-[top] duration-200 ${isBarHidden && !isMobileSectionMenuOpen && !isMobileMoreOpen && !isDownloadOpen ? '-top-14' : 'top-0'}`}>
         <button
           onClick={onBack}
           aria-label="Back"
@@ -699,7 +699,7 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
 
       {/* MAIN DOCUMENT AREA */}
       <main className="flex-1 flex flex-col h-full relative overflow-hidden">
-        <div className="no-print hidden md:flex h-16 bg-white border-b border-slate-200 items-center justify-between px-8 flex-none">
+        <div className="no-print hidden lg:flex h-16 bg-white border-b border-slate-200 items-center justify-between px-8 flex-none">
           <div className="min-w-0 pr-4 flex-1">
             <h1 className="text-lg font-bold text-slate-900 flex items-center gap-2 truncate">
               <span className="truncate">{isRevisionMode ? "Revision Plan" : units[0].topicTitle}</span>
@@ -723,17 +723,17 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
           </div>
         </div>
 
-        <div ref={contentScrollRef} onScroll={handleContentScroll} className="flex-1 overflow-y-auto pt-12 md:pt-0 md:p-12 relative bg-slate-100">
-          <div className="mx-auto min-h-full md:min-h-[1000px] bg-white md:shadow-xl md:rounded-xl overflow-hidden print:shadow-none print:rounded-none">
+        <div ref={contentScrollRef} onScroll={handleContentScroll} className="flex-1 overflow-y-auto pt-12 md:pt-[4.5rem] md:px-6 md:pb-6 lg:p-12 relative bg-slate-100">
+          <div className="mx-auto min-h-full md:min-h-[1000px] md:max-w-3xl lg:max-w-none bg-white md:shadow-xl md:rounded-xl overflow-hidden print:shadow-none print:rounded-none">
             {loading && (
               <div className="absolute inset-0 bg-white/90 z-50 flex flex-col items-center justify-center">
                 <div className="w-12 h-12 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
                 <p className="text-slate-500 font-medium">Drafting content...</p>
               </div>
             )}
-            <div className={`px-4 py-4 md:p-12 lg:p-16 print:p-0 ${isRefining ? 'is-refining' : ''}`}>
+            <div className={`px-4 py-4 sm:px-6 md:p-10 xl:p-16 print:p-0 ${isRefining ? 'is-refining' : ''}`}>
               {activeSection === 'educational' && (
-                <div className="md:hidden flex bg-slate-100 p-1 rounded-lg mb-4 w-fit">
+                <div className="lg:hidden flex bg-slate-100 p-1 rounded-lg mb-4 w-fit">
                   <button onClick={() => setResourceViewMode('content')} className={`px-4 py-2 text-xs font-bold rounded-md ${resourceViewMode === 'content' ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500'}`}>Content</button>
                   <button onClick={() => setResourceViewMode('memo')} className={`px-4 py-2 text-xs font-bold rounded-md ${resourceViewMode === 'memo' ? 'bg-white shadow-sm text-green-600' : 'text-slate-500'}`}>Memo</button>
                 </div>
@@ -899,12 +899,12 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
 
       {/* AI CHAT SIDEBAR */}
       {isChatOpen && (
-        <aside className="no-print fixed inset-0 z-[60] w-full md:static md:inset-auto md:z-30 md:w-96 bg-white border-l border-slate-200 shadow-2xl flex flex-col">
-          <div className="h-14 md:h-16 border-b border-slate-100 flex items-center px-4 md:px-6 bg-slate-50/50 justify-between flex-none">
+        <aside className="no-print fixed inset-0 z-[60] w-full lg:static lg:inset-auto lg:z-30 lg:w-96 bg-white border-l border-slate-200 shadow-2xl flex flex-col">
+          <div className="h-14 lg:h-16 border-b border-slate-100 flex items-center px-4 lg:px-6 bg-slate-50/50 justify-between flex-none">
             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Sparkles className="w-4 h-4 text-blue-600" /> AI Assistant</h3>
-            <button onClick={() => setIsChatOpen(false)} aria-label="Close assistant" className="w-11 h-11 -mr-2 md:w-auto md:h-auto md:mr-0 flex items-center justify-center"><X className="w-5 h-5 md:w-4 md:h-4 text-slate-400" /></button>
+            <button onClick={() => setIsChatOpen(false)} aria-label="Close assistant" className="w-11 h-11 -mr-2 lg:w-auto lg:h-auto lg:mr-0 flex items-center justify-center"><X className="w-5 h-5 lg:w-4 lg:h-4 text-slate-400" /></button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+          <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-4">
             {chatHistory.length === 0 && (<div className="text-center text-slate-400 text-sm py-10"><Bot className="w-8 h-8 mx-auto mb-2 opacity-50" /><p>Ask me to refine, shorten, or expand the current document.</p></div>)}
             {chatHistory.map((msg) => (
               <div key={msg.id} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
@@ -918,8 +918,8 @@ const LessonWorkspace: React.FC<LessonWorkspaceProps> = ({ units, activeClass, o
           </div>
           <div className="p-4 border-t border-slate-100 flex-none">
             <form onSubmit={handleRefine} className="relative">
-              <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Make it shorter..." className="w-full pl-4 pr-14 md:pr-12 py-3 text-base bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" />
-              <button type="submit" disabled={isRefining || !chatInput} className="absolute right-1.5 top-1.5 p-2.5 md:right-2 md:top-2 md:p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"><Send className="w-4 h-4" /></button>
+              <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Make it shorter..." className="w-full pl-4 pr-14 lg:pr-12 py-3 text-base bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500/20 outline-none transition-all" />
+              <button type="submit" disabled={isRefining || !chatInput} className="absolute right-1.5 top-1.5 p-2.5 lg:right-2 lg:top-2 lg:p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"><Send className="w-4 h-4" /></button>
             </form>
           </div>
         </aside>
@@ -1009,7 +1009,7 @@ const EmptyState = ({ icon: Icon, label, action }: EmptyStateProps) => (
   <div className="flex flex-col items-center justify-center py-20 md:py-32 text-center opacity-60 hover:opacity-100 transition-opacity">
     <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4"><Icon className="w-8 h-8 text-slate-300" /></div>
     <h3 className="text-xl font-bold text-slate-700 mb-2">No {label}</h3>
-    <button onClick={action} className="flex items-center gap-2 min-h-12 px-4 md:min-h-0 md:px-0 text-blue-600 font-bold hover:underline"><Sparkles className="w-4 h-4" /> Generate Now</button>
+    <button onClick={action} className="flex items-center gap-2 min-h-12 px-4 lg:min-h-0 lg:px-0 text-blue-600 font-bold hover:underline"><Sparkles className="w-4 h-4" /> Generate Now</button>
   </div>
 );
 

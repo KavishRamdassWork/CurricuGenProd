@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useUser, UserButton } from '@clerk/nextjs';
 import ClassManager from '@/components/ClassManager';
 import CurriculumDashboard from '@/components/CurriculumDashboard';
@@ -26,6 +26,21 @@ const Dashboard = () => {
   const [isDbLoading, setIsDbLoading] = useState(true);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  // The drawer layout is used below 1024px (phones and tablets); the collapsible rail only exists above it.
+  const [isDesktop, setIsDesktop] = useState(false);
+  const sidebarCollapsed = isDesktop && isSidebarCollapsed;
+  const preWorkspaceCollapsed = useRef<boolean | null>(null);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const update = () => setIsDesktop(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    // Mid-size laptop windows start with the compact rail so content has room.
+    if (window.innerWidth < 1280) setIsSidebarCollapsed(true);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
   const [dbUser, setDbUser] = useState<DbUser | null>(null);
   const [editingClass, setEditingClass] = useState<Classroom | null>(null);
 
@@ -220,6 +235,17 @@ const Dashboard = () => {
     }
   };
 
+  useEffect(() => {
+    if (appState === AppState.LESSON_VIEW) {
+      if (preWorkspaceCollapsed.current === null) preWorkspaceCollapsed.current = isSidebarCollapsed;
+      setIsSidebarCollapsed(true);
+    } else if (preWorkspaceCollapsed.current !== null) {
+      setIsSidebarCollapsed(preWorkspaceCollapsed.current);
+      preWorkspaceCollapsed.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appState]);
+
   const handleOpenWorkspace = (units: WeekUnit[]) => { setSelectedUnits(units); setAppState(AppState.LESSON_VIEW); };
   const handleBackToDashboard = () => { setAppState(AppState.DASHBOARD); setSelectedUnits([]); };
   const handleBackToClasses = () => { setAppState(AppState.CLASS_LIST); setActiveClassId(null); setSelectedUnits([]); };
@@ -257,9 +283,9 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="h-dvh md:h-screen bg-slate-50 font-sans text-slate-900 overflow-hidden flex">
+    <div className="h-dvh bg-slate-50 font-sans text-slate-900 overflow-hidden flex">
       {/* Mobile top bar (the workspace has its own bar, so hide this one there) */}
-      <div className={`${appState === AppState.LESSON_VIEW ? 'hidden' : 'md:hidden'} fixed top-0 left-0 right-0 h-14 bg-slate-900 flex items-center px-4 z-40 shadow-lg`}>
+      <div className={`${appState === AppState.LESSON_VIEW ? 'hidden' : 'lg:hidden'} fixed top-0 left-0 right-0 h-14 bg-slate-900 flex items-center px-4 z-40 shadow-lg`}>
         <button
           onClick={() => setIsMobileNavOpen(true)}
           className="min-w-12 min-h-12 flex items-center justify-center text-white -ml-2"
@@ -276,36 +302,36 @@ const Dashboard = () => {
       </div>
 
       {/* Sidebar */}
-      <aside className={`fixed md:static inset-y-0 left-0 z-50 w-64 ${isSidebarCollapsed ? 'md:w-20' : 'md:w-64'} bg-slate-900 text-slate-300 flex flex-col transition-transform md:transition-all duration-300 ease-in-out md:shadow-2xl flex-none ${isMobileNavOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} md:translate-x-0`}>
+      <aside className={`fixed lg:static inset-y-0 left-0 z-50 w-64 max-w-[85vw] ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-64'} bg-slate-900 text-slate-300 flex flex-col transition-transform lg:transition-all duration-300 ease-in-out lg:shadow-2xl flex-none ${isMobileNavOpen ? 'translate-x-0 shadow-2xl' : '-translate-x-full'} lg:translate-x-0`}>
         <div className="h-16 flex items-center px-5 border-b border-slate-800">
-          <div className={`flex items-center gap-3 ${isSidebarCollapsed ? 'justify-center w-full' : ''}`}>
+          <div className={`flex items-center gap-3 ${sidebarCollapsed ? 'justify-center w-full' : ''}`}>
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white flex-shrink-0">
               <Sparkles className="w-5 h-5" />
             </div>
-            {!isSidebarCollapsed && <span className="font-bold text-white text-lg tracking-tight">CurricuGen</span>}
+            {!sidebarCollapsed && <span className="font-bold text-white text-lg tracking-tight">CurricuGen</span>}
           </div>
         </div>
 
         <div className="flex-1 py-6 px-3 space-y-2">
-          <NavItem icon={Users} label="My Classes" isActive={appState === AppState.CLASS_LIST} onClick={() => { handleBackToClasses(); setIsMobileNavOpen(false); }} collapsed={isSidebarCollapsed} />
+          <NavItem icon={Users} label="My Classes" isActive={appState === AppState.CLASS_LIST} onClick={() => { handleBackToClasses(); setIsMobileNavOpen(false); }} collapsed={sidebarCollapsed} />
           {activeClass && (
             <>
               <div className="my-4 border-t border-slate-800 mx-3" />
-              {!isSidebarCollapsed && <div className="px-3 mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Active Class</div>}
-              {!isSidebarCollapsed && (
+              {!sidebarCollapsed && <div className="px-3 mb-2 text-xs font-bold text-slate-500 uppercase tracking-wider">Active Class</div>}
+              {!sidebarCollapsed && (
                 <div className="px-3 py-3 rounded-xl bg-slate-800/50 border border-slate-700/50 mb-2">
                   <div className="text-sm font-bold text-white mb-1 truncate">{activeClass.name}</div>
                   <div className="text-xs text-slate-400">{activeClass.grade} • {activeClass.subject}</div>
                 </div>
               )}
-              <NavItem icon={LayoutDashboard} label="Curriculum" isActive={appState === AppState.DASHBOARD || appState === AppState.LESSON_VIEW} onClick={() => { setAppState(AppState.DASHBOARD); setIsMobileNavOpen(false); }} collapsed={isSidebarCollapsed} />
+              <NavItem icon={LayoutDashboard} label="Curriculum" isActive={appState === AppState.DASHBOARD || appState === AppState.LESSON_VIEW} onClick={() => { setAppState(AppState.DASHBOARD); setIsMobileNavOpen(false); }} collapsed={sidebarCollapsed} />
             </>
           )}
         </div>
 
         {/* Credits + User */}
         <div className="border-t border-slate-800 p-4 space-y-3">
-          {!isSidebarCollapsed && dbUser && (
+          {!sidebarCollapsed && dbUser && (
             <div className={`px-3 py-2.5 rounded-xl text-xs font-medium ${dbUser.plan === 'PRO' ? 'bg-amber-500/10 border border-amber-500/20 text-amber-300' : dbUser.plan === 'BETA' ? 'bg-blue-500/10 border border-blue-500/20 text-blue-300' : 'bg-slate-800 text-slate-400'}`}>
               {dbUser.plan === 'PRO' || dbUser.plan === 'BETA' ? (
                 <div className="flex items-center gap-2">
@@ -322,9 +348,9 @@ const Dashboard = () => {
           )}
           <div className="flex items-center gap-3">
             <UserButton />
-            {!isSidebarCollapsed && <span className="text-sm text-slate-400 truncate">{clerkUser?.firstName || 'Teacher'}</span>}
+            {!sidebarCollapsed && <span className="text-sm text-slate-400 truncate">{clerkUser?.firstName || 'Teacher'}</span>}
           </div>
-          <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="w-full flex items-center justify-center p-2 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white transition-colors">
+          <button onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)} className="hidden lg:flex w-full items-center justify-center p-2 rounded-lg hover:bg-slate-800 text-slate-500 hover:text-white transition-colors">
             <Menu className="w-4 h-4" />
           </button>
         </div>
@@ -333,13 +359,13 @@ const Dashboard = () => {
       {/* Mobile nav backdrop */}
       {isMobileNavOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/40 z-40"
+          className="lg:hidden fixed inset-0 bg-black/40 z-40"
           onClick={() => setIsMobileNavOpen(false)}
         />
       )}
 
       {/* Main Content */}
-      <div className={`flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50 ${appState === AppState.LESSON_VIEW ? 'pt-0' : 'pt-14'} md:pt-0`}>
+      <div className={`flex-1 flex flex-col h-full overflow-hidden bg-slate-50/50 ${appState === AppState.LESSON_VIEW ? 'pt-0' : 'pt-14'} lg:pt-0`}>
         <div className="flex-1 overflow-hidden relative">
           {appState === AppState.CLASS_LIST && (
             <ClassManager
@@ -389,7 +415,7 @@ interface NavItemProps {
 }
 
 const NavItem = ({ icon: Icon, label, isActive, onClick, collapsed }: NavItemProps) => (
-  <button onClick={onClick} className={`w-full min-h-12 md:min-h-0 flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'} ${collapsed ? 'justify-center' : ''}`} title={collapsed ? label : undefined}>
+  <button onClick={onClick} className={`w-full min-h-12 lg:min-h-0 flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200 group ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/20' : 'text-slate-400 hover:text-white hover:bg-slate-800'} ${collapsed ? 'justify-center' : ''}`} title={collapsed ? label : undefined}>
     <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-400 group-hover:text-white'}`} />
     {!collapsed && <span className="font-medium text-sm">{label}</span>}
   </button>
