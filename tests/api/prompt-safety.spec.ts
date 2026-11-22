@@ -1,4 +1,6 @@
 import { test, expect } from '@playwright/test';
+import { readFileSync } from 'fs';
+import path from 'path';
 import {
   CANARY,
   cleanText,
@@ -12,7 +14,7 @@ const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
 
 test.describe('promptSafety.cleanText', () => {
   test('removes invisible, bidi, tag and control characters', () => {
-    const dirty = 'a​b⁠c﻿d‮e⁦f\u{E0041}g\u0001h\u007Fi';
+    const dirty = 'a\u200Bb\u2060c\uFEFFd\u202Ee\u2066f\u{E0041}g\u0001h\u007Fi';
     expect(cleanText(dirty)).toBe('abcdefghi');
   });
 
@@ -24,7 +26,7 @@ test.describe('promptSafety.cleanText', () => {
   test('leaves legitimate text unchanged', () => {
     const samples = [
       'Ngiyabonga, ukuthi kahle — Afrikaans: “môre”',
-      '👨‍👩‍👧 family',
+      '👨\u200D👩\u200D👧 family',
       'if x < 5 and y > 2',
       "learner's notes",
     ];
@@ -79,7 +81,7 @@ test.describe('promptSafety.buildSystemInstruction', () => {
 test.describe('promptSafety.decodeTextUpload', () => {
   test('decodes and cleans text uploads', () => {
     expect(
-      decodeTextUpload({ name: 'a.txt', mimeType: 'text/plain', data: b64('hi​ there') }),
+      decodeTextUpload({ name: 'a.txt', mimeType: 'text/plain', data: b64('hi\u200B there') }),
     ).toBe('hi there');
   });
 
@@ -87,5 +89,17 @@ test.describe('promptSafety.decodeTextUpload', () => {
     expect(
       decodeTextUpload({ name: 'a.pdf', mimeType: 'application/pdf', data: b64('%PDF') }),
     ).toBeNull();
+  });
+});
+
+test.describe('source hygiene', () => {
+  test('sanitiser source and its tests contain no literal invisible characters', () => {
+    const forbidden = /[\u200B-\u200F\u2028-\u202E\u2060-\u2069\uFEFF\u{E0000}-\u{E007F}]/u;
+    for (const file of ['src/lib/promptSafety.ts', 'tests/api/prompt-safety.spec.ts']) {
+      const text = readFileSync(path.resolve(__dirname, '../../', file), 'utf8');
+      text.split('\n').forEach((line, i) => {
+        expect(forbidden.test(line), `${file}:${i + 1} has a literal invisible character`).toBe(false);
+      });
+    }
   });
 });

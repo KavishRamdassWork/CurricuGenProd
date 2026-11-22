@@ -9,9 +9,9 @@ const DEFAULT_MAX = 2000;
 // C0 controls (except \t \n \r), DEL and C1 controls.
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g;
 // Zero-width space, LRM, RLM, word joiner, BOM. ZWJ (U+200D) and ZWNJ (U+200C) are kept on purpose.
-const INVISIBLE_CHARS = /[​‎‏⁠﻿]/g;
+const INVISIBLE_CHARS = /[\u200B\u200E\u200F\u2060\uFEFF]/g;
 // Bidi embeddings/overrides and isolates.
-const BIDI_CHARS = /[‪-‮⁦-⁩]/g;
+const BIDI_CHARS = /[\u202A-\u202E\u2066-\u2069]/g;
 // Unicode tag characters (used to smuggle invisible text).
 const TAG_CHARS = /[\u{E0000}-\u{E007F}]/gu;
 
